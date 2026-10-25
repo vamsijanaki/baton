@@ -8,6 +8,8 @@ Every pull request with a user-visible change adds a line under **Unreleased** (
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-25
+
 ### Fixed
 
 - Sharing a project with **Share with …** on Home no longer leaves every desktop app out: it now follows the
@@ -88,6 +90,7 @@ First public release. A Mac app (Apple silicon) for one person using more than o
 - Never reads tokens or the Keychain, never modifies Claude Code or Claude.app, no servers, no telemetry. Inherited
   `CLAUDE_*` / `ANTHROPIC_*` variables are cleared at start-up so each `claude` runs as exactly the chosen account.
 
-[Unreleased]: https://github.com/vamsijanaki/baton/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/vamsijanaki/baton/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/vamsijanaki/baton/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/vamsijanaki/baton/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/vamsijanaki/baton/releases/tag/v1.0.0
