@@ -8,6 +8,8 @@ Every pull request with a user-visible change adds a line under **Unreleased** (
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-25
+
 ### Changed
 
 - Turning passive usage capture on or off now opens the standard preview showing the exact `statusLine` change, and
@@ -73,5 +75,6 @@ First public release. A Mac app (Apple silicon) for one person using more than o
 - Never reads tokens or the Keychain, never modifies Claude Code or Claude.app, no servers, no telemetry. Inherited
   `CLAUDE_*` / `ANTHROPIC_*` variables are cleared at start-up so each `claude` runs as exactly the chosen account.
 
-[Unreleased]: https://github.com/vamsijanaki/baton/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/vamsijanaki/baton/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/vamsijanaki/baton/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/vamsijanaki/baton/releases/tag/v1.0.0
