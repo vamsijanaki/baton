@@ -1,0 +1,828 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How Baton Works</title>
+<meta name="description" content="How Baton is built: per-project links into one transcript store, a safety engine that snapshots, journals and rolls back every change, no network calls of its own, and a test suite that runs in a fake home folder.">
+<link rel="canonical" href="https://trybaton.app/how-it-works/">
+<meta name="theme-color" content="#0b0f0e" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfcfc" media="(prefers-color-scheme: light)">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/assets/icon-256.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Baton">
+<meta property="og:url" content="https://trybaton.app/how-it-works/">
+<meta property="og:title" content="How Baton works">
+<meta property="og:description" content="The engineering behind Baton: one transcript store, per-project links, and a safety engine that snapshots, journals and rolls back every change.">
+<meta property="og:image" content="https://trybaton.app/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="How Baton works">
+<meta name="twitter:description" content="The engineering behind Baton: one transcript store, per-project links, and a safety engine that snapshots, journals and rolls back every change.">
+<meta name="twitter:image" content="https://trybaton.app/assets/og.png">
+<style>
+/* Layout: the site's near-black desk and hairlines, set as a long technical article.
+   A sticky contents rail on wide screens, one ~68ch reading column, diagrams allowed wider. */
+:root {
+  --bg: #0b0f0e;
+  --bg-2: #101615;
+  --fg: #eef3f2;
+  --fg-2: #a3b0ad;
+  --fg-3: #6f7d7a;
+  --line: rgba(220, 240, 235, .09);
+  --line-2: rgba(220, 240, 235, .16);
+  --accent: #3cc2b0;
+  --accent-ink: #04211d;
+  --accent-glow: rgba(60, 194, 176, .22);
+  --accent-soft: rgba(60, 194, 176, .1);
+  --no: #e3897d;
+  --no-soft: rgba(227, 137, 125, .1);
+  --btn-2: rgba(255, 255, 255, .06);
+  --btn-2-hover: rgba(255, 255, 255, .1);
+  --nav-bg: rgba(11, 15, 14, .72);
+  --shot-shadow: 0 0 0 1px rgba(220,240,235,.08), 0 30px 80px -30px rgba(0,0,0,.8), 0 10px 30px -15px rgba(0,0,0,.6);
+  --grid: rgba(220, 240, 235, .045);
+  --term-bg: #070a09; --term-fg: #d8e2df; --term-dim: #6f7d7a; --term-line: rgba(220,240,235,.1);
+  --term-hi: #ffffff; --accent-term: #3cc2b0;
+  --f-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --f-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --max: 1120px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #fbfcfc; --bg-2: #f2f5f4; --fg: #0b0f0e; --fg-2: #4b5755; --fg-3: #6c7875;
+    --line: rgba(11, 30, 26, .09); --line-2: rgba(11, 30, 26, .18);
+    --accent: #0d7f72; --accent-ink: #ffffff; --accent-glow: rgba(13, 127, 114, .16); --accent-soft: rgba(13, 127, 114, .08);
+    --no: #a6473b; --no-soft: rgba(166, 71, 59, .07);
+    --btn-2: rgba(11, 30, 26, .04); --btn-2-hover: rgba(11, 30, 26, .08);
+    --nav-bg: rgba(251, 252, 252, .78);
+    --shot-shadow: 0 0 0 1px rgba(11,30,26,.1), 0 30px 70px -30px rgba(11,30,26,.4), 0 8px 24px -12px rgba(11,30,26,.25);
+    --grid: rgba(11, 30, 26, .05);
+    --term-bg: #111817; --term-fg: #e2eae8; --term-dim: #85928f; --term-line: rgba(220,240,235,.12);
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #fbfcfc; --bg-2: #f2f5f4; --fg: #0b0f0e; --fg-2: #4b5755; --fg-3: #6c7875;
+  --line: rgba(11, 30, 26, .09); --line-2: rgba(11, 30, 26, .18);
+  --accent: #0d7f72; --accent-ink: #ffffff; --accent-glow: rgba(13, 127, 114, .16); --accent-soft: rgba(13, 127, 114, .08);
+  --no: #a6473b; --no-soft: rgba(166, 71, 59, .07);
+  --btn-2: rgba(11, 30, 26, .04); --btn-2-hover: rgba(11, 30, 26, .08);
+  --nav-bg: rgba(251, 252, 252, .78);
+  --shot-shadow: 0 0 0 1px rgba(11,30,26,.1), 0 30px 70px -30px rgba(11,30,26,.4), 0 8px 24px -12px rgba(11,30,26,.25);
+  --grid: rgba(11, 30, 26, .05);
+  --term-bg: #111817; --term-fg: #e2eae8; --term-dim: #85928f; --term-line: rgba(220,240,235,.12);
+  color-scheme: light;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { overflow-x: clip; -webkit-text-size-adjust: 100%; scroll-behavior: smooth; scroll-padding-top: 76px; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 400 17px/1.65 var(--f-sans);
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  overflow-x: clip;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: inherit; }
+p { margin: 0; }
+h1, h2, h3 { margin: 0; text-wrap: balance; font-weight: 650; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+.skip { position: absolute; left: -9999px; top: 12px; z-index: 50; background: var(--fg); color: var(--bg); padding: 8px 14px; border-radius: 8px; }
+.skip:focus { left: max(16px, env(safe-area-inset-left, 0px)); }
+
+.wrap {
+  max-width: calc(var(--max) + 48px); margin-inline: auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+@media (min-width: 720px) {
+  .wrap { padding-left: max(24px, env(safe-area-inset-left, 0px)); padding-right: max(24px, env(safe-area-inset-right, 0px)); }
+}
+
+/* Buttons + nav + footer: same as the home page */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 44px; padding: 0 18px; border-radius: 999px;
+  font: 550 15px/1 var(--f-sans); letter-spacing: -.005em; text-decoration: none; white-space: nowrap;
+  border: 1px solid transparent; transition: background-color .15s, border-color .15s, transform .15s;
+}
+.btn svg { width: 17px; height: 17px; flex: none; }
+.btn-primary { background: var(--fg); color: var(--bg); }
+.btn-primary:hover { transform: translateY(-1px); }
+.btn-ghost { background: var(--btn-2); border-color: var(--line-2); color: var(--fg); }
+.btn-ghost:hover { background: var(--btn-2-hover); }
+.btn-sm { height: 34px; padding: 0 14px; font-size: 14px; }
+
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--bg); }
+.nav {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  background: var(--nav-bg); backdrop-filter: saturate(160%) blur(14px); -webkit-backdrop-filter: saturate(160%) blur(14px);
+  border-bottom: 1px solid transparent; transition: border-color .2s;
+}
+.nav.scrolled { border-bottom-color: var(--line); }
+.nav .wrap { display: flex; align-items: center; gap: 28px; height: 60px; }
+.brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; font-weight: 650; font-size: 17px; letter-spacing: -.02em; }
+.brand svg { width: 26px; height: 26px; }
+.mark-a { fill: var(--fg); } .mark-b { fill: var(--accent); }
+.nav-links { display: flex; gap: 26px; margin-left: auto; }
+.nav-links a { text-decoration: none; color: var(--fg-2); font-size: 14px; font-weight: 500; transition: color .15s; }
+.nav-links a:hover, .nav-links a[aria-current="page"] { color: var(--fg); }
+@media (max-width: 640px) { .nav-links { display: none; } .nav .btn { margin-left: auto; } }
+
+footer { border-top: 1px solid var(--line); padding-block: 40px 48px; font-size: 14px; color: var(--fg-3); margin-top: clamp(64px, 9vw, 120px); }
+footer .wrap { display: grid; gap: 24px; }
+.foot-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; }
+.foot-links { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.foot-links a { text-decoration: none; color: var(--fg-2); }
+.foot-links a:hover { color: var(--fg); }
+.foot-fine { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; }
+
+/* Header */
+.head { position: relative; isolation: isolate; padding-block: clamp(48px, 8vw, 96px) clamp(40px, 5vw, 64px); }
+.head::before {
+  content: ""; position: absolute; inset: 0 0 auto; height: 620px; z-index: -1; pointer-events: none;
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 56px 56px; background-position: center top;
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 30% 20%, #000 20%, transparent 75%);
+          mask-image: radial-gradient(ellipse 70% 60% at 30% 20%, #000 20%, transparent 75%);
+}
+.kicker { font: 500 13px/1 var(--f-mono); color: var(--accent); letter-spacing: .02em; }
+.head h1 { margin-top: 22px; max-width: 18ch; font-size: clamp(38px, 6.2vw, 72px); line-height: 1.03; letter-spacing: -.042em; font-weight: 680; }
+.head h1 span { color: var(--fg-3); }
+.head .lead { margin-top: 22px; max-width: 58ch; font-size: clamp(17px, 1.6vw, 19.5px); color: var(--fg-2); }
+.facts { list-style: none; margin: 40px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-block: 1px solid var(--line); max-width: 860px; }
+.facts li { padding: 18px 18px 18px 0; display: grid; gap: 4px; min-width: 0; }
+.facts li + li { border-left: 1px solid var(--line); padding-left: 18px; }
+.facts b { font: 600 clamp(22px, 2.6vw, 28px)/1.1 var(--f-mono); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.facts span { font-size: 13.5px; color: var(--fg-3); line-height: 1.4; }
+@media (max-width: 640px) {
+  .facts { grid-template-columns: 1fr 1fr; }
+  .facts li:nth-child(3) { border-left: 0; padding-left: 0; }
+  .facts li:nth-child(n+3) { border-top: 1px solid var(--line); }
+}
+.head-links { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* Article with contents rail */
+.doc { display: grid; gap: 40px; }
+@media (min-width: 1080px) { .doc { grid-template-columns: 210px minmax(0, 1fr); gap: 64px; } }
+.toc { font-size: 14px; min-width: 0; }
+.toc p { font: 600 11.5px/1 var(--f-sans); letter-spacing: .09em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 14px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: toc; }
+.toc a { display: block; padding: 6px 0 6px 12px; border-left: 1px solid var(--line); color: var(--fg-2); text-decoration: none; line-height: 1.35; }
+.toc a:hover { color: var(--fg); border-left-color: var(--fg-3); }
+.toc a.on { color: var(--fg); border-left-color: var(--accent); }
+@media (min-width: 1080px) { .toc nav { position: sticky; top: 92px; } }
+@media (max-width: 1079px) {
+  .toc { border-block: 1px solid var(--line); padding-block: 20px; }
+  .toc ol { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0 16px; }
+}
+
+article { min-width: 0; display: grid; gap: clamp(72px, 9vw, 112px); }
+article > section { display: grid; gap: 20px; min-width: 0; }
+.prose { display: grid; gap: 18px; max-width: 68ch; min-width: 0; }
+.prose p, .prose li { color: var(--fg-2); }
+.prose strong, .prose b { color: var(--fg); font-weight: 600; }
+.prose ul, .prose ol { margin: 0; padding-left: 1.2em; display: grid; gap: 10px; }
+.prose a, .note a, td a { color: var(--fg); text-underline-offset: 3px; text-decoration-color: var(--line-2); }
+.prose a:hover, .note a:hover, td a:hover { text-decoration-color: currentColor; }
+h2 { font-size: clamp(28px, 3.4vw, 40px); line-height: 1.08; letter-spacing: -.035em; max-width: 24ch; }
+h3 { font-size: 19px; line-height: 1.3; letter-spacing: -.015em; }
+.sec-num { font: 500 13px/1 var(--f-mono); color: var(--fg-3); }
+code { font: 500 .86em/1.4 var(--f-mono); color: var(--fg); background: var(--btn-2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; overflow-wrap: anywhere; }
+.note { font-size: 15px; color: var(--fg-3); max-width: 68ch; }
+
+/* Diagrams */
+figure { margin: 8px 0 0; display: grid; gap: 14px; min-width: 0; }
+.fig-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); padding: clamp(10px, 2vw, 20px); -webkit-overflow-scrolling: touch; }
+.fig-scroll svg { display: block; width: 100%; height: auto; min-width: 760px; }
+figcaption { font-size: 14.5px; color: var(--fg-3); max-width: 72ch; line-height: 1.55; }
+.scroll-hint { display: none; font: 500 12px/1 var(--f-mono); color: var(--fg-3); }
+@media (max-width: 820px) { .scroll-hint { display: block; } }
+
+.dg { font-family: var(--f-sans); }
+.dg .box { fill: var(--bg-2); stroke: var(--line-2); stroke-width: 1; }
+.dg .box-acc { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+.dg .box-no { fill: var(--no-soft); stroke: var(--no); stroke-width: 1.2; }
+.dg .box-dash { fill: none; stroke: var(--fg-3); stroke-width: 1; stroke-dasharray: 4 4; }
+.dg .frame { fill: none; stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 2 5; }
+.dg .t { fill: var(--fg); font-size: 14px; font-weight: 600; }
+.dg .tm { fill: var(--fg); font: 600 12.5px var(--f-mono); }
+.dg .s { fill: var(--fg-2); font-size: 11.5px; }
+.dg .sm { fill: var(--fg-2); font: 400 11px var(--f-mono); }
+.dg .lbl { fill: var(--fg-3); font: 500 11px var(--f-mono); }
+.dg .n { fill: var(--accent); font: 600 11px var(--f-mono); }
+.dg .zone { fill: var(--fg-3); font: 600 10.5px var(--f-sans); letter-spacing: .09em; }
+.dg .acc { fill: var(--accent); }
+.dg .no { fill: var(--no); }
+.dg .wire { fill: none; stroke: var(--fg-3); stroke-width: 1.4; }
+.dg .wire-acc { fill: none; stroke: var(--accent); stroke-width: 1.4; }
+.dg .wire-no { fill: none; stroke: var(--no); stroke-width: 1.4; }
+.dg .head-m { fill: var(--fg-3); }
+.dg .head-acc { fill: var(--accent); }
+.dg .head-no { fill: var(--no); }
+
+/* Pipeline detail list: a real sequence, so it is numbered */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1px solid var(--line); max-width: 860px; counter-reset: st; }
+.steps li { counter-increment: st; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 4px 12px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.steps li::before { content: counter(st, decimal-leading-zero); grid-row: span 2; font: 600 13px/1.7 var(--f-mono); color: var(--accent); }
+.steps b { font-weight: 600; }
+.steps span { color: var(--fg-2); font-size: 15.5px; min-width: 0; }
+.steps li.fail::before { content: "!"; color: var(--no); }
+
+/* Tables */
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; max-width: 100%; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; min-width: 620px; }
+th, td { text-align: left; vertical-align: top; padding: 13px 16px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { font: 600 11.5px/1.3 var(--f-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--fg-3); background: var(--bg-2); }
+td { color: var(--fg-2); line-height: 1.5; }
+td:first-child { color: var(--fg); font-weight: 550; }
+td.none { color: var(--accent); font-weight: 600; }
+
+/* Decisions */
+.decisions { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.dec { background: var(--bg); padding: clamp(20px, 3vw, 32px); display: grid; gap: 16px; min-width: 0; }
+.dec h3 { font-size: 20px; }
+.dec-cols { display: grid; gap: 16px; }
+@media (min-width: 760px) { .dec-cols { grid-template-columns: 1fr 1fr; gap: 32px; } }
+.dec-cols > div { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.tag { display: inline-flex; align-items: center; gap: 7px; font: 600 11.5px/1 var(--f-sans); letter-spacing: .08em; text-transform: uppercase; }
+.tag svg { width: 14px; height: 14px; }
+.tag.yes { color: var(--accent); }
+.tag.nope { color: var(--no); }
+.dec p { color: var(--fg-2); font-size: 15.5px; }
+.dec .src { font: 500 12.5px/1.4 var(--f-mono); color: var(--fg-3); }
+.dec .src a { color: var(--fg-2); text-underline-offset: 3px; text-decoration-color: var(--line-2); }
+
+/* Never list */
+.never { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+@media (min-width: 760px) { .never { grid-template-columns: 1fr 1fr; } }
+.never li { background: var(--bg); padding: 22px clamp(18px, 2.6vw, 28px); display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 4px 14px; align-content: start; }
+.never li svg { width: 18px; height: 18px; color: var(--no); margin-top: 3px; grid-row: span 2; }
+.never b { font-weight: 600; line-height: 1.4; }
+.never span { color: var(--fg-2); font-size: 15px; }
+.never-foot { font-size: 15px; color: var(--fg-3); max-width: 72ch; }
+.never-foot b { color: var(--fg-2); font-weight: 600; }
+
+/* Terminal (test output) */
+.term-win { border-radius: 12px; background: var(--term-bg); color: var(--term-fg); box-shadow: var(--shot-shadow); overflow: hidden; max-width: 860px; }
+.term-bar { position: relative; display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px; border-bottom: 1px solid var(--term-line); font: 500 12px/1 var(--f-sans); color: var(--term-dim); }
+.term-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--term-line); }
+.term-bar b { position: absolute; left: 0; right: 0; text-align: center; font-weight: 500; pointer-events: none; }
+.term-body { margin: 0; padding: 16px 18px 20px; font: 400 12.5px/1.75 var(--f-mono); overflow-x: auto; white-space: pre; }
+.term-body .p { color: var(--accent-term); }
+.term-body .d { color: var(--term-dim); }
+.term-body .hi { color: var(--term-hi); }
+
+/* Limits */
+.limits { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1px solid var(--line); max-width: 860px; }
+.limits li { padding: 18px 0; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+.limits b { font-weight: 600; }
+.limits span { color: var(--fg-2); font-size: 15.5px; }
+
+/* Code links */
+.code-links { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+@media (min-width: 760px) { .code-links { grid-template-columns: 1fr 1fr; } }
+.code-links a { display: grid; gap: 6px; height: 100%; background: var(--bg); padding: 20px clamp(18px, 2.6vw, 26px); text-decoration: none; transition: background-color .15s; }
+.code-links a:hover { background: var(--bg-2); }
+.code-links code { justify-self: start; color: var(--accent); background: transparent; border: 0; padding: 0; font-size: 13.5px; }
+.code-links span { color: var(--fg-2); font-size: 15px; line-height: 1.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .btn-primary:hover { transform: none; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5l3.5 3.5 7.5-8"/></symbol>
+  <symbol id="i-x" viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M5.5 5.5l9 9m0-9l-9 9"/></symbol>
+  <symbol id="i-mark" viewBox="0 0 100 100"><rect class="mark-a" x="6" y="30" width="56" height="14" rx="7"/><rect class="mark-b" x="38" y="56" width="56" height="14" rx="7"/></symbol>
+</svg>
+
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="Baton home"><svg aria-hidden="true"><use href="#i-mark"/></svg>Baton</a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="/#features">Features</a>
+      <a href="/how-it-works/" aria-current="page">How it works</a>
+      <a href="/#fair-use">Fair use</a>
+      <a href="https://github.com/vamsijanaki/baton">GitHub</a>
+    </nav>
+    <a class="btn btn-primary btn-sm" href="/download">Download</a>
+  </div>
+</header>
+
+<main id="main">
+  <div class="head">
+    <div class="wrap">
+      <p class="kicker">How it works</p>
+      <h1>Built so a bug can't cost you a transcript. <span>Here is how.</span></h1>
+      <p class="lead">Baton touches the folders that hold your Claude Code history, so it is built like a tool that has to be trusted with them. This page explains the design, the safety engine, what Baton will never do, and how it is tested, with links to the code for every claim.</p>
+      <ul class="facts" aria-label="At a glance">
+        <li><b>39</b><span>sandbox tests, 368 checks, 2.2 s</span></li>
+        <li><b>0</b><span>network requests made by Baton itself</span></li>
+        <li><b>0</b><span>tokens or Keychain items read</span></li>
+        <li><b>10</b><span>primitive file steps, each with an inverse</span></li>
+      </ul>
+      <div class="head-links">
+        <a class="btn btn-ghost btn-sm" href="https://github.com/vamsijanaki/baton/blob/main/ARCHITECTURE.md">Read ARCHITECTURE.md</a>
+        <a class="btn btn-ghost btn-sm" href="https://github.com/vamsijanaki/baton"><svg aria-hidden="true"><use href="#i-github"/></svg>Source on GitHub</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="doc">
+      <aside class="toc" aria-label="On this page">
+        <nav>
+          <p>On this page</p>
+          <ol>
+            <li><a href="#problem">The problem</a></li>
+            <li><a href="#overview">System overview</a></li>
+            <li><a href="#sharing">How sharing works</a></li>
+            <li><a href="#safety">The safety engine</a></li>
+            <li><a href="#decisions">Decisions we made</a></li>
+            <li><a href="#never">What Baton will never do</a></li>
+            <li><a href="#network">Network and privacy</a></li>
+            <li><a href="#fair-use">Fair-use guardrails</a></li>
+            <li><a href="#testing">How it's tested</a></li>
+            <li><a href="#limits">What could break</a></li>
+            <li><a href="#code">Read the code</a></li>
+          </ol>
+        </nav>
+      </aside>
+
+      <article>
+        <section id="problem" aria-labelledby="problem-h">
+          <p class="sec-num">01</p>
+          <h2 id="problem-h">The problem, in file paths</h2>
+          <div class="prose">
+            <p>Claude Code keeps everything for a sign-in in one folder: <code>~/.claude</code>. A second account means setting <code>CLAUDE_CONFIG_DIR</code> to another folder, and that gives you a second, separate history. Account 1 writes to <code>~/.claude/projects/&lt;project&gt;/</code>, account 2 to <code>~/.claude-work/projects/&lt;project&gt;/</code>. When account 1 runs out of usage halfway through a task, <code>claude --continue</code> under account 2 finds nothing.</p>
+            <p>The Claude desktop app has its own version of this. It is an Electron app with one sign-in per data folder. Its Code tab writes every transcript into <code>~/.claude/projects</code> regardless of account, but what its sidebar shows comes from a separate, per-app index: one small <code>local_&lt;id&gt;.json</code> file per session under <code>claude-code-sessions/&lt;account&gt;/&lt;org&gt;/</code>. The app rewrites those files by atomic rename, and their format is not documented.</p>
+            <p>So Baton has to do two things: let your own accounts continue the same project history, and keep each desktop app's sidebar in step, without copying a single credential and without ever putting the transcripts at risk.</p>
+          </div>
+        </section>
+
+        <section id="overview" aria-labelledby="overview-h">
+          <p class="sec-num">02</p>
+          <h2 id="overview-h">System overview</h2>
+          <div class="prose">
+            <p>Baton is an Electron app: a sandboxed React window, a sandboxed menu-bar popover, a main process in TypeScript (about 5,800 lines), and a 100-line Swift helper. Every change to your Claude folders passes through one module, the safety engine. There is no server.</p>
+          </div>
+          <figure>
+            <p class="scroll-hint">Scroll sideways to see the whole diagram →</p>
+            <div class="fig-scroll">
+              <svg class="dg" viewBox="0 0 960 540" role="img" aria-label="Baton's windows talk to the main process over IPC. The main process and the sync engine send every change through the safety engine, which writes guarded changes to the home folder (one transcript store in ~/.claude/projects, per-project links in extra accounts, Baton's own state in ~/.baton) and only Code-tab index files in the desktop apps' data folders. Desktop app copies are APFS clones of /Applications/Claude.app launched with their own data folder.">
+                <defs>
+                  <marker id="ov-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head-m" d="M0 0L10 5L0 10z"/></marker>
+                  <marker id="ov-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head-acc" d="M0 0L10 5L0 10z"/></marker>
+                </defs>
+                <!-- Baton.app -->
+                <rect class="frame" x="20" y="40" width="340" height="460" rx="16"/>
+                <text class="zone" x="40" y="64">BATON.APP</text>
+                <rect class="box" x="40" y="80" width="140" height="56" rx="9"/>
+                <text class="t" x="54" y="104">Main window</text><text class="s" x="54" y="122">sandboxed, CSP self</text>
+                <rect class="box" x="200" y="80" width="140" height="56" rx="9"/>
+                <text class="t" x="214" y="104">Tray popover</text><text class="s" x="214" y="122">smaller preload</text>
+                <rect class="box" x="40" y="190" width="300" height="56" rx="9"/>
+                <text class="t" x="54" y="214">Main process</text><text class="s" x="54" y="232">plan · preview · launch gate · usage</text>
+                <rect class="box-acc" x="40" y="300" width="300" height="64" rx="9"/>
+                <text class="t" x="54" y="326">Safety engine</text><text class="s" x="54" y="346">guard · snapshot · journal · rollback</text>
+                <rect class="box" x="40" y="420" width="140" height="56" rx="9"/>
+                <text class="t" x="54" y="444">Swift helper</text><text class="s" x="54" y="462">icons, focus, quit</text>
+                <rect class="box" x="200" y="420" width="140" height="56" rx="9"/>
+                <text class="t" x="214" y="444">Sync engine</text><text class="s" x="214" y="462">watches index files</text>
+                <line class="wire" x1="110" y1="136" x2="110" y2="188" marker-end="url(#ov-m)"/><text class="lbl" x="118" y="167">IPC</text>
+                <line class="wire" x1="270" y1="136" x2="270" y2="188" marker-end="url(#ov-m)"/><text class="lbl" x="278" y="167">IPC (subset)</text>
+                <line class="wire-acc" x1="190" y1="246" x2="190" y2="298" marker-end="url(#ov-a)"/><text class="lbl" x="198" y="277">operations</text>
+                <line class="wire-acc" x1="270" y1="420" x2="270" y2="366" marker-end="url(#ov-a)"/><text class="lbl" x="278" y="398">sync ops</text>
+                <path class="wire" d="M40 218H30V448H38" marker-end="url(#ov-m)"/>
+                <!-- engine to the world -->
+                <path class="wire-acc" d="M340 318H420V150H476" marker-end="url(#ov-a)"/><text class="lbl" x="348" y="310">writes</text>
+                <path class="wire-acc" d="M340 346H420V420H476" marker-end="url(#ov-a)"/><text class="lbl" x="348" y="362">index files</text>
+                <!-- Home -->
+                <rect class="frame" x="480" y="40" width="460" height="220" rx="16"/>
+                <text class="zone" x="500" y="64">HOME FOLDER</text>
+                <rect class="box-acc" x="500" y="76" width="180" height="76" rx="9"/>
+                <text class="tm" x="514" y="100">~/.claude/projects</text><text class="s" x="514" y="120">the one transcript store</text><text class="s acc" x="514" y="138">add-only</text>
+                <rect class="box" x="770" y="76" width="150" height="76" rx="9"/>
+                <text class="tm" x="784" y="100">~/.claude-work</text><text class="s" x="784" y="120">projects/ holds one</text><text class="s" x="784" y="138">link per shared project</text>
+                <line class="wire" x1="770" y1="114" x2="682" y2="114" marker-end="url(#ov-m)"/><text class="lbl" x="726" y="106" text-anchor="middle">symlink</text>
+                <rect class="box" x="500" y="180" width="420" height="56" rx="9"/>
+                <text class="tm" x="514" y="204">~/.baton</text><text class="s" x="514" y="222">state · journal · verified snapshots · hidden sidebar backups · sync state</text>
+                <!-- Application Support -->
+                <rect class="frame" x="480" y="290" width="460" height="230" rx="16"/>
+                <text class="zone" x="500" y="314">~/LIBRARY/APPLICATION SUPPORT</text>
+                <rect class="box" x="500" y="330" width="170" height="72" rx="9"/>
+                <text class="tm" x="514" y="354">Claude/</text><text class="s" x="514" y="374">default app's data</text><text class="sm" x="514" y="390">local_*.json index</text>
+                <rect class="box" x="770" y="330" width="150" height="72" rx="9"/>
+                <text class="tm" x="784" y="354">Claude-Work/</text><text class="s" x="784" y="374">Work app's data</text><text class="sm" x="784" y="390">local_*.json index</text>
+                <line class="wire" x1="672" y1="366" x2="768" y2="366" marker-start="url(#ov-m)" marker-end="url(#ov-m)"/>
+                <text class="lbl" x="720" y="358" text-anchor="middle">synced</text><text class="lbl" x="720" y="382" text-anchor="middle">newest wins</text>
+                <rect class="box" x="500" y="436" width="170" height="64" rx="9"/>
+                <text class="t" x="514" y="460">Claude.app</text><text class="s" x="514" y="478">in /Applications,</text><text class="s" x="514" y="492">never modified</text>
+                <rect class="box" x="770" y="436" width="150" height="64" rx="9"/>
+                <text class="t" x="784" y="460">Claude Work.app</text><text class="s" x="784" y="478">APFS clone,</text><text class="s" x="784" y="492">tinted icon</text>
+                <line class="wire" x1="670" y1="468" x2="768" y2="468" marker-end="url(#ov-m)"/><text class="lbl" x="720" y="460" text-anchor="middle">cp -Rc</text>
+                <line class="wire" x1="845" y1="436" x2="845" y2="404" marker-end="url(#ov-m)"/><text class="lbl" x="837" y="424" text-anchor="end">--user-data-dir</text>
+              </svg>
+            </div>
+            <figcaption>The two windows can only ask the main process for things over a fixed list of IPC channels. Writes go through the safety engine, which allows add-only changes in the transcript store, links in extra accounts, and only Code-tab index files inside desktop data folders. The Swift helper (called with <code>execFile</code>) tints icons and focuses or quits apps.</figcaption>
+          </figure>
+        </section>
+
+        <section id="sharing" aria-labelledby="sharing-h">
+          <p class="sec-num">03</p>
+          <h2 id="sharing-h">How sharing a project works</h2>
+          <div class="prose">
+            <p>Account 1's <code>~/.claude/projects</code> stays the only place transcripts live. Sharing a project with another account adds exactly one symlink inside that account's own <code>projects/</code> folder. When <code>claude</code> runs as that account, it writes through the link straight into the shared store, so Terminal sessions need no syncing at all.</p>
+            <p>For the desktop apps, transcripts already land in the store. What differs is each app's sidebar index, so Baton mirrors only the index files whose <code>cwd</code> is inside the shared project. A file is read only when it is stable (same size and mtime before and after the read, and valid JSON). The newest version wins; the older one is kept in a snapshot. Deletions never propagate, and apps that are open are never written to.</p>
+          </div>
+          <figure>
+            <p class="scroll-hint">Scroll sideways to see the whole diagram →</p>
+            <div class="fig-scroll">
+              <svg class="dg" viewBox="0 0 960 420" role="img" aria-label="Sharing acme-app with the Work account. In Terminal, claude running as Work writes into ~/.claude-work/projects/-Users-me-acme-app, which is a symlink resolving to the shared store in ~/.claude/projects, where the new transcript is added. In the desktop apps, every app's Code tab writes transcripts into the same store, and the sidebar index file local_s3.json is synced between the default app and the Work app, newest wins. Turning Work off removes the link and moves Work's sidebar entries into ~/.baton/hidden, restorable.">
+                <defs>
+                  <marker id="sh-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head-m" d="M0 0L10 5L0 10z"/></marker>
+                  <marker id="sh-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head-acc" d="M0 0L10 5L0 10z"/></marker>
+                </defs>
+                <text class="zone" x="20" y="46">TERMINAL</text>
+                <rect class="box" x="20" y="60" width="230" height="72" rx="9"/>
+                <text class="t" x="34" y="86">claude, as Work</text><text class="sm" x="34" y="106">CLAUDE_CONFIG_DIR=</text><text class="sm" x="34" y="121">~/.claude-work</text>
+                <rect class="box-dash" x="330" y="60" width="250" height="72" rx="9"/>
+                <text class="tm" x="344" y="86">~/.claude-work/projects/</text><text class="sm" x="344" y="106">-Users-me-acme-app</text><text class="s" x="344" y="121">a symlink, nothing else</text>
+                <line class="wire" x1="250" y1="96" x2="328" y2="96" marker-end="url(#sh-m)"/><text class="lbl" x="290" y="88" text-anchor="middle">writes</text>
+                <line class="wire-acc" x1="580" y1="96" x2="658" y2="96" marker-end="url(#sh-a)"/><text class="lbl" x="620" y="88" text-anchor="middle">resolves</text>
+                <rect class="box-acc" x="660" y="60" width="280" height="170" rx="9"/>
+                <text class="tm" x="676" y="86">~/.claude/projects/</text><text class="sm" x="676" y="104">-Users-me-acme-app/</text>
+                <text class="sm" x="692" y="132">s1.jsonl</text><text class="sm" x="692" y="150">s2.jsonl</text>
+                <text class="sm acc" x="692" y="168">s3.jsonl</text><text class="s acc" x="760" y="168">new, from Work</text>
+                <text class="s" x="676" y="208">add-only: nothing is overwritten</text>
+
+                <text class="zone" x="20" y="236">DESKTOP APPS</text>
+                <rect class="box" x="20" y="250" width="230" height="72" rx="9"/>
+                <text class="t" x="34" y="276">Claude (default)</text><text class="s" x="34" y="296">sidebar index</text><text class="sm" x="34" y="312">local_s3.json</text>
+                <rect class="box" x="330" y="250" width="250" height="72" rx="9"/>
+                <text class="t" x="344" y="276">Claude Work</text><text class="s" x="344" y="296">sidebar index</text><text class="sm" x="344" y="312">local_s3.json</text>
+                <line class="wire" x1="252" y1="286" x2="328" y2="286" marker-start="url(#sh-m)" marker-end="url(#sh-m)"/>
+                <text class="lbl" x="290" y="278" text-anchor="middle">synced</text><text class="lbl" x="290" y="304" text-anchor="middle">newest wins</text>
+                <path class="wire" d="M580 286H800V234" marker-end="url(#sh-m)"/><text class="lbl" x="596" y="278">every app's transcripts</text>
+
+                <rect class="box-dash" x="20" y="350" width="920" height="56" rx="9"/>
+                <text class="t" x="40" y="383">Turning Work off</text>
+                <text class="s" x="230" y="373">1. The link is removed. Work's transcripts stay in the store.</text>
+                <text class="s" x="230" y="393">2. Work's sidebar entries move to ~/.baton/hidden/ with a manifest. Turning Work on again restores them.</text>
+              </svg>
+            </div>
+            <figcaption>Sharing <code>acme-app</code> with a second account called Work. The Terminal side is one link. The desktop side is a mirror of small index files between apps. Account 1's apps are never hidden from.</figcaption>
+          </figure>
+          <p class="note">Code: <a href="https://github.com/vamsijanaki/baton/blob/main/electron/sharing.ts">electron/sharing.ts</a> (<code>shareTerminalSteps</code>, <code>planSync</code>, <code>readStable</code>, <code>planHide</code>, <code>planRestoreHidden</code>).</p>
+        </section>
+
+        <section id="safety" aria-labelledby="safety-h">
+          <p class="sec-num">04</p>
+          <h2 id="safety-h">The safety engine</h2>
+          <div class="prose">
+            <p>Every change Baton makes to your Claude folders is an <strong>operation</strong>: a list of primitive steps (make a folder, create a link, remove a link, write a file atomically, move something aside, hide a sidebar entry, quarantine, build or remove an app copy, move to the Trash) plus the paths it touches. The engine runs every operation through the same pipeline.</p>
+          </div>
+          <figure>
+            <p class="scroll-hint">Scroll sideways to see the whole diagram →</p>
+            <div class="fig-scroll">
+              <svg class="dg" viewBox="0 0 960 400" role="img" aria-label="The safety pipeline: plan, preview, confirm, running-app check, snapshot with sha256, verify the snapshot, journal, apply step by step, check the result, done. A bad snapshot stops before anything changes. A step that throws or a result that does not match triggers an automatic rollback from the journal, as does a crash, on the next start. A finished operation can be undone later as a new operation.">
+                <defs>
+                  <marker id="pl-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head-m" d="M0 0L10 5L0 10z"/></marker>
+                  <marker id="pl-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head-acc" d="M0 0L10 5L0 10z"/></marker>
+                  <marker id="pl-n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head-no" d="M0 0L10 5L0 10z"/></marker>
+                </defs>
+                <!-- row 1 -->
+                <rect class="box" x="20" y="30" width="130" height="84" rx="9"/>
+                <text class="n" x="32" y="50">1</text><text class="t" x="32" y="70">Plan</text><text class="s" x="32" y="88">steps from disk</text><text class="s" x="32" y="102">nothing written</text>
+                <rect class="box" x="178" y="30" width="130" height="84" rx="9"/>
+                <text class="n" x="190" y="50">2</text><text class="t" x="190" y="70">Preview</text><text class="s" x="190" y="88">every file op</text><text class="s" x="190" y="102">guard checked</text>
+                <rect class="box" x="336" y="30" width="130" height="84" rx="9"/>
+                <text class="n" x="348" y="50">3</text><text class="t" x="348" y="70">Confirm</text><text class="s" x="348" y="88">you approve</text><text class="s" x="348" y="102">this exact plan</text>
+                <rect class="box" x="494" y="30" width="130" height="84" rx="9"/>
+                <text class="n" x="506" y="50">4</text><text class="t" x="506" y="70">App check</text><text class="s" x="506" y="88">Claude open on</text><text class="s" x="506" y="102">these? stop.</text>
+                <rect class="box" x="652" y="30" width="130" height="84" rx="9"/>
+                <text class="n" x="664" y="50">5</text><text class="t" x="664" y="70">Snapshot</text><text class="s" x="664" y="88">tar.gz + sha256</text><text class="s" x="664" y="102">of touched paths</text>
+                <rect class="box" x="810" y="30" width="130" height="84" rx="9"/>
+                <text class="n" x="822" y="50">6</text><text class="t" x="822" y="70">Verify backup</text><text class="s" x="822" y="88">extract and</text><text class="s" x="822" y="102">re-hash all</text>
+                <line class="wire" x1="150" y1="72" x2="176" y2="72" marker-end="url(#pl-m)"/>
+                <line class="wire" x1="308" y1="72" x2="334" y2="72" marker-end="url(#pl-m)"/>
+                <line class="wire" x1="466" y1="72" x2="492" y2="72" marker-end="url(#pl-m)"/>
+                <line class="wire" x1="624" y1="72" x2="650" y2="72" marker-end="url(#pl-m)"/>
+                <line class="wire" x1="782" y1="72" x2="808" y2="72" marker-end="url(#pl-m)"/>
+                <path class="wire" d="M830 114V142H85V168" marker-end="url(#pl-m)"/>
+                <!-- bad snapshot -->
+                <line class="wire-no" x1="905" y1="114" x2="905" y2="168" marker-end="url(#pl-n)"/><text class="lbl" x="897" y="150" text-anchor="end">bad hash</text>
+                <rect class="box-no" x="810" y="170" width="130" height="84" rx="9"/>
+                <text class="t" x="822" y="200">Stop</text><text class="s" x="822" y="218">nothing was</text><text class="s" x="822" y="232">changed</text>
+                <!-- row 2 -->
+                <rect class="box" x="20" y="170" width="130" height="84" rx="9"/>
+                <text class="n" x="32" y="190">7</text><text class="t" x="32" y="210">Journal</text><text class="s" x="32" y="228">pre-state saved</text><text class="s" x="32" y="242">before each step</text>
+                <rect class="box" x="178" y="170" width="130" height="84" rx="9"/>
+                <text class="n" x="190" y="190">8</text><text class="t" x="190" y="210">Apply</text><text class="s" x="190" y="228">one step at a</text><text class="s" x="190" y="242">time, re-guarded</text>
+                <rect class="box" x="336" y="170" width="130" height="84" rx="9"/>
+                <text class="n" x="348" y="190">9</text><text class="t" x="348" y="210">Check result</text><text class="s" x="348" y="228">links, hashes</text><text class="s" x="348" y="242">and moves</text>
+                <rect class="box-acc" x="494" y="170" width="130" height="84" rx="9"/>
+                <text class="n" x="506" y="190">10</text><text class="t" x="506" y="210">Done</text><text class="s" x="506" y="228">snapshot kept,</text><text class="s" x="506" y="242">in History</text>
+                <rect class="box-dash" x="652" y="170" width="130" height="84" rx="9"/>
+                <text class="t" x="664" y="200">Undo later</text><text class="s" x="664" y="218">a new operation</text><text class="s" x="664" y="232">from the backup</text>
+                <line class="wire" x1="150" y1="212" x2="176" y2="212" marker-end="url(#pl-m)"/>
+                <line class="wire" x1="308" y1="212" x2="334" y2="212" marker-end="url(#pl-m)"/>
+                <line class="wire-acc" x1="466" y1="212" x2="492" y2="212" marker-end="url(#pl-a)"/>
+                <line class="wire" x1="624" y1="212" x2="650" y2="212" marker-end="url(#pl-m)"/>
+                <!-- failure row -->
+                <line class="wire-no" x1="243" y1="254" x2="243" y2="308" marker-end="url(#pl-n)"/><text class="lbl" x="251" y="286">throws</text>
+                <line class="wire-no" x1="401" y1="254" x2="401" y2="308" marker-end="url(#pl-n)"/><text class="lbl" x="409" y="286">mismatch</text>
+                <rect class="box-no" x="20" y="310" width="130" height="74" rx="9"/>
+                <text class="t" x="32" y="336">Crash / quit</text><text class="s" x="32" y="354">rolled back on</text><text class="s" x="32" y="368">next start</text>
+                <line class="wire-no" x1="150" y1="347" x2="176" y2="347" marker-end="url(#pl-n)"/>
+                <rect class="box-no" x="178" y="310" width="288" height="74" rx="9"/>
+                <text class="t" x="190" y="336">Roll back automatically</text><text class="s" x="190" y="354">inverse steps from the journal, newest first</text><text class="s" x="190" y="368">each one checks the disk first, so it is safe twice</text>
+                <line class="wire" x1="466" y1="347" x2="492" y2="347" marker-end="url(#pl-m)"/>
+                <rect class="box" x="494" y="310" width="288" height="74" rx="9"/>
+                <text class="t" x="506" y="336">Exactly as before</text><text class="s" x="506" y="354">journal says rolled-back</text><text class="s" x="506" y="368">the error and every undo step are in History</text>
+              </svg>
+            </div>
+            <figcaption>The pipeline in <a href="https://github.com/vamsijanaki/baton/blob/main/electron/safety.ts">electron/safety.ts</a>, <code>runOperation</code>. Red paths are the failure cases; every one ends with your folders as they were.</figcaption>
+          </figure>
+
+          <ol class="steps" aria-label="Pipeline details">
+            <li><b>Plan</b><span>A planner reads the disk and builds steps. It writes nothing, except staging copies under <code>~/.baton/work/</code>.</span></li>
+            <li><b>Preview (dry run)</b><span>Every step is described in plain words, checked against the guard list, and checked for running Claude processes. The plan waits under a random token for 30 minutes.</span></li>
+            <li><b>Confirm</b><span>The engine refuses to run anything that was not confirmed, and only the previewed plan runs.</span></li>
+            <li><b>Running-app check</b><span>A <code>claude</code> process using a touched account folder, or a desktop app whose <code>--user-data-dir</code> is touched, blocks the operation. Baton can ask the desktop app to quit, wait up to 20 s, apply, and reopen it. If it doesn't quit, nothing changes.</span></li>
+            <li><b>Snapshot</b><span>Every touched path is walked without following links into a manifest (type, mode, mtime, link target, sha256 per file) and archived with <code>/usr/bin/tar</code>. Over 512 MB is refused: a correct plan never touches transcripts, so it is always small.</span></li>
+            <li><b>Verify the snapshot</b><span>The archive is checksummed, extracted into a scratch folder and compared entry by entry with the manifest. Any difference stops the operation before the first change.</span></li>
+            <li><b>Journal</b><span>Status <code>applying</code>, the steps, and a slot for each step's previous state, written atomically.</span></li>
+            <li><b>Apply</b><span>Before each step the guard list runs again, this time resolving every parent folder through symlinks, so a write that would reach a protected folder by going through a link is refused. The step's previous state (did it exist, old link target, a copy of the old file) is saved to the journal before anything changes.</span></li>
+            <li><b>Check the result</b><span>Links point where they should, written files hash to their source, moved paths are where they belong.</span></li>
+            <li><b>Done</b><span>The snapshot stays (retention keeps at least the newest 5 per kind, and never prunes snapshots that hold a sync conflict's losing version or quarantined items). Undo builds a new operation from the snapshot, with its own preview, so an undo can be undone too.</span></li>
+            <li class="fail"><b>On any failure</b><span>Inverse steps run from the journal, newest first. Each checks the current state before acting, so a half-applied step or a second rollback is safe. A crash leaves the journal in <code>applying</code>; the next start rolls it back and tells you. A test kills the process with <code>SIGKILL</code> mid-operation to prove it.</span></li>
+          </ol>
+
+          <h3>The guard list</h3>
+          <div class="prose"><p>Checked when planning and again immediately before each step (<code>guardStep</code>). Paths are compared case-insensitively, because APFS is.</p></div>
+          <div class="tbl">
+            <table>
+              <thead><tr><th>Where</th><th>What Baton may do</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td><code>/Applications/Claude.app</code></td><td>Nothing. Clones are copied from it.</td><td>It is Anthropic's signed app.</td></tr>
+                <tr><td><code>~/.claude/projects</code></td><td>Create new files and folders only. Never overwrite, move or delete.</td><td>It is the only copy of your history. Even a rollback keeps a new file there.</td></tr>
+                <tr><td>The rest of <code>~/.claude</code></td><td>Nothing (one opt-in exception, see <a href="#limits">What could break</a>).</td><td>Account 1 is your setup from before Baton. Uninstalling Baton leaves Claude as it was.</td></tr>
+                <tr><td>Desktop app data folders</td><td>Write or hide <code>local_*.json</code> index files; create a brand-new app's folder; send a whole extra app's folder to the Trash.</td><td>The rest holds the app's sign-in, settings and storage. Baton only needs the sidebar index.</td></tr>
+                <tr><td>App copies</td><td>Build or remove <code>*.app</code> only inside Baton's own apps folder.</td><td>Never another tool's copies (tested).</td></tr>
+                <tr><td>Links</td><td>Remove a path only if it is a symlink.</td><td>Removing a link never touches what it points at.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="decisions" aria-labelledby="decisions-h">
+          <p class="sec-num">05</p>
+          <h2 id="decisions-h">Decisions we made, and what we said no to</h2>
+          <div class="decisions">
+            <div class="dec">
+              <h3>Share one project at a time</h3>
+              <div class="dec-cols">
+                <div><span class="tag yes"><svg aria-hidden="true"><use href="#i-check"/></svg>Chose</span><p>One symlink per shared project inside the account's real <code>projects/</code> folder. If the account already had its own history there, Baton adds its files to the store only where no file of that name exists, and keeps the old folder renamed beside the link.</p></div>
+                <div><span class="tag nope"><svg aria-hidden="true"><use href="#i-x"/></svg>Said no to</span><p>Linking the whole <code>projects/</code> folder. Early versions did, and it shares every project, including ones that belong on a personal account. Baton detects that setup and offers a previewed, undoable migration away from it.</p></div>
+              </div>
+              <p class="src"><a href="https://github.com/vamsijanaki/baton/blob/main/electron/sharing.ts">sharing.ts</a> · shareTerminalSteps, planMigration</p>
+            </div>
+            <div class="dec">
+              <h3>Run Claude's own app, unmodified</h3>
+              <div class="dec-cols">
+                <div><span class="tag yes"><svg aria-hidden="true"><use href="#i-check"/></svg>Chose</span><p>A copy-on-write APFS clone of Claude.app per account (<code>cp -Rc</code>, almost no disk), launched with its own <code>--user-data-dir</code>. The color is a Finder icon outside the code seal, so the signature still verifies and the Keychain still trusts it. Clones are rebuilt when Claude updates.</p></div>
+                <div><span class="tag nope"><svg aria-hidden="true"><use href="#i-x"/></svg>Said no to</span><p>Patching the Claude bundle or injecting code. That breaks Anthropic's signature and Keychain trust, and modifying Claude is off the table on principle.</p></div>
+              </div>
+              <p class="src"><a href="https://github.com/vamsijanaki/baton/blob/main/electron/desktop.ts">desktop.ts</a> · buildClone, openProfile</p>
+            </div>
+            <div class="dec">
+              <h3>Copy whole index files; newest wins, the other is kept</h3>
+              <div class="dec-cols">
+                <div><span class="tag yes"><svg aria-hidden="true"><use href="#i-check"/></svg>Chose</span><p>Treat each sidebar file as opaque bytes. On a conflict the newest version wins, ties are broken by hash so the result is deterministic, and the losing version is kept in a pinned snapshot with a notification.</p></div>
+                <div><span class="tag nope"><svg aria-hidden="true"><use href="#i-x"/></svg>Said no to</span><p>Merging fields (the format is undocumented and changes between releases), per-file symlinks (the app's atomic renames replace them on the first save), and folder symlinks (they share every project's chats at once).</p></div>
+              </div>
+              <p class="src"><a href="https://github.com/vamsijanaki/baton/blob/main/electron/sharing.ts">sharing.ts</a> · planSync, syncOperation</p>
+            </div>
+            <div class="dec">
+              <h3>Never read a token</h3>
+              <div class="dec-cols">
+                <div><span class="tag yes"><svg aria-hidden="true"><use href="#i-check"/></svg>Chose</span><p>Allow-lists. From <code>.claude.json</code>, only the email and four plan/organization type fields. From a desktop app's config, only the account id and whether a sign-in exists. From a running <code>claude</code>'s environment, three keys; the rest of the string is dropped at once. Every sign-in happens in Claude's own flow.</p></div>
+                <div><span class="tag nope"><svg aria-hidden="true"><use href="#i-x"/></svg>Said no to</span><p>Copying sign-ins between accounts, reading the Keychain, or calling Anthropic's APIs with your token.</p></div>
+              </div>
+              <p class="src"><a href="https://github.com/vamsijanaki/baton/blob/main/electron/core.ts">core.ts</a> · readEmail, pickEnv · <a href="https://github.com/vamsijanaki/baton/blob/main/electron/fairuse.ts">fairuse.ts</a> · KIND_HINT_KEYS</p>
+            </div>
+            <div class="dec">
+              <h3>Usage from the official CLI, on demand</h3>
+              <div class="dec-cols">
+                <div><span class="tag yes"><svg aria-hidden="true"><use href="#i-check"/></svg>Chose</span><p><code>claude -p /usage</code>, which reads plan limits without a model call. It runs only when Baton opens or you press Refresh, at most once per 15 minutes per account, and the gate survives restarts. An optional status-line hook captures limits Claude Code already reports, for free.</p></div>
+                <div><span class="tag nope"><svg aria-hidden="true"><use href="#i-x"/></svg>Said no to</span><p>Polling on a timer, calling the API directly, or scraping claude.ai. Usage is shown, never acted on: no alerts, and no "switch accounts" suggestions.</p></div>
+              </div>
+              <p class="src"><a href="https://github.com/vamsijanaki/baton/blob/main/electron/usage.ts">usage.ts</a> · probeUsage · <a href="https://github.com/vamsijanaki/baton/blob/main/electron/fairuse.ts">fairuse.ts</a> · ProbeGate</p>
+            </div>
+            <div class="dec">
+              <h3>Unsharing hides, it doesn't delete</h3>
+              <div class="dec-cols">
+                <div><span class="tag yes"><svg aria-hidden="true"><use href="#i-check"/></svg>Chose</span><p>Turning an account off removes its link and moves the project's sidebar entries from that account's apps into <code>~/.baton/hidden/</code>, with a manifest of source paths and hashes. Turning it back on restores them, keeping any newer file already in place.</p></div>
+                <div><span class="tag nope"><svg aria-hidden="true"><use href="#i-x"/></svg>Said no to</span><p>Deleting the entries. Transcripts would survive, but titles and sidebar state would be gone for good.</p></div>
+              </div>
+              <p class="src"><a href="https://github.com/vamsijanaki/baton/blob/main/electron/sharing.ts">sharing.ts</a> · planHide, planRestoreHidden</p>
+            </div>
+            <div class="dec">
+              <h3>No server at all</h3>
+              <div class="dec-cols">
+                <div><span class="tag yes"><svg aria-hidden="true"><use href="#i-check"/></svg>Chose</span><p>Everything happens on your Mac, in files you can inspect. Updates are a new download from GitHub Releases.</p></div>
+                <div><span class="tag nope"><svg aria-hidden="true"><use href="#i-x"/></svg>Said no to</span><p>Accounts, telemetry, crash reporting, and an auto-updater that phones home.</p></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="never" aria-labelledby="never-h">
+          <p class="sec-num">06</p>
+          <h2 id="never-h">What Baton will never do</h2>
+          <ul class="never">
+            <li><svg aria-hidden="true"><use href="#i-x"/></svg><b>Delete or overwrite a transcript</b><span>The store is add-only, enforced by the guard list before every step.</span></li>
+            <li><svg aria-hidden="true"><use href="#i-x"/></svg><b>Delete your data</b><span>Removing means unlinking a symlink, quarantining into a snapshot, hiding into a backup, or the macOS Trash.</span></li>
+            <li><svg aria-hidden="true"><use href="#i-x"/></svg><b>Read your tokens or the Keychain</b><span>Only allow-listed fields are taken from config files.</span></li>
+            <li><svg aria-hidden="true"><use href="#i-x"/></svg><b>Copy a sign-in between accounts</b><span>Every account and app signs in through Claude's own flow.</span></li>
+            <li><svg aria-hidden="true"><use href="#i-x"/></svg><b>Modify Claude.app or Claude Code</b><span>App copies are byte-identical clones; the CLI is run as installed.</span></li>
+            <li><svg aria-hidden="true"><use href="#i-x"/></svg><b>Send anything over the network</b><span>Baton's process has no network code; its windows are locked to local content.</span></li>
+            <li><svg aria-hidden="true"><use href="#i-x"/></svg><b>Change anything without showing you first</b><span>Every operation has a dry-run preview. The one exception is background sync for projects you chose to share, which still snapshots and journals every pass.</span></li>
+            <li><svg aria-hidden="true"><use href="#i-x"/></svg><b>Help you dodge usage limits or a ban</b><span>No limit alerts or account rotation; a suspended account's projects aren't offered to other accounts.</span></li>
+          </ul>
+          <p class="never-foot">What Baton does delete is its own material: rebuildable Claude.app copies, empty folders it created when rolling back, its staging folders, and its own old snapshots under retention. <b>Never a file it did not create.</b></p>
+        </section>
+
+        <section id="network" aria-labelledby="network-h">
+          <p class="sec-num">07</p>
+          <h2 id="network-h">Network and privacy</h2>
+          <div class="prose">
+            <p>Both windows run with context isolation, the Chromium sandbox and no Node access, under a content security policy of <code>default-src 'self'</code>. They reach the main process only through small preload bridges. The menu-bar popover's bridge is smaller still: it cannot confirm accounts, change sharing or run operations, and its handlers check that the request really came from the popover.</p>
+            <p>Here is every outbound connection that happens because of Baton:</p>
+          </div>
+          <div class="tbl">
+            <table>
+              <thead><tr><th>Who</th><th>What</th><th>When</th></tr></thead>
+              <tbody>
+                <tr><td>Baton's own process</td><td class="none">None. No fetch, sockets, analytics, crash reports or update checks.</td><td>Never</td></tr>
+                <tr><td>Baton's windows</td><td class="none">None. Blocked by the CSP.</td><td>Never</td></tr>
+                <tr><td>Official <code>claude</code> CLI, run by Baton</td><td><code>claude -p /usage</code> (plan limits, no model call) and <code>claude auth status</code>, with a cleaned environment.</td><td>When Baton opens (gated) and when you press Refresh</td></tr>
+                <tr><td>Official <code>claude</code> CLI, in Terminal</td><td><code>claude auth login</code> and the sessions you start. Baton writes a launch script; Terminal runs it.</td><td>When you click Sign in or Continue</td></tr>
+                <tr><td>Claude desktop app copies</td><td>Whatever Claude's desktop app normally does. They are unmodified.</td><td>When you open one</td></tr>
+                <tr><td>Your browser</td><td>Links you click: Anthropic's policies and support, GitHub Sponsors.</td><td>On click</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="note">Baton also scrubs inherited <code>CLAUDE_*</code> and <code>ANTHROPIC_*</code> variables from its own environment at startup. Without that, starting Baton from inside a Claude session would make every <code>claude</code> it launches sign in as that session's account. Diagnostics exports redact tokens, emails and your home path.</p>
+        </section>
+
+        <section id="fair-use" aria-labelledby="fair-h">
+          <p class="sec-num">08</p>
+          <h2 id="fair-h">Fair-use guardrails, as code</h2>
+          <div class="prose">
+            <p>Baton is for one person using their own accounts. The rules live in <a href="https://github.com/vamsijanaki/baton/blob/main/electron/fairuse.ts">electron/fairuse.ts</a>, and one launch gate covers the main window, the native tray menu and the popover.</p>
+            <ul>
+              <li><strong>Account kind</strong> (Personal or Work) is detected from non-secret plan and organization fields, by whole-word match. When nothing is clear, Baton asks.</li>
+              <li><strong>Ownership:</strong> "This account is mine, and only I use it." is required and timestamped before Baton opens <code>claude</code> for an account.</li>
+              <li><strong>A second Personal plan</strong> also needs "I'm not using this to get around usage limits."</li>
+              <li><strong>Suspended accounts</strong> are detected only from clear wording that the account was suspended, banned or disabled; phrasings like "will be suspended if" or "not suspended" never match (25 checks). Their projects are refused for other accounts, in launches and in sharing.</li>
+              <li><strong>Work accounts:</strong> sharing into one, or out of one into a Personal account, adds a notice to the preview.</li>
+            </ul>
+            <p>These are guardrails, not enforcement. Baton can't verify who owns an account, detection depends on CLI wording that can change, and a determined person can edit Baton's state file. The aim is that Baton never makes the wrong thing easy and never suggests it.</p>
+          </div>
+        </section>
+
+        <section id="testing" aria-labelledby="testing-h">
+          <p class="sec-num">09</p>
+          <h2 id="testing-h">How it's tested</h2>
+          <div class="prose">
+            <p>Every test runs in a <strong>fake home folder</strong> built fresh in a temp directory: an account 1 store with transcripts, an old-style account with a whole-folder link, a new-style account, three desktop data folders, a tiny stand-in Claude.app and a fake Trash. All roots come from one overridable module, and the harness aborts if they ever resolve to the real home folder.</p>
+          </div>
+          <div class="term-win">
+            <div class="term-bar"><i></i><i></i><i></i><b>npm test</b></div>
+<pre class="term-body"><span class="p">✓</span> snapshot → change → restore is byte-for-byte; corrupt snapshots fail verification <span class="d">(8 checks)</span>
+<span class="p">✓</span> share merges an account’s private history (adds only) and undo brings it back <span class="d">(8 checks)</span>
+<span class="p">✓</span> migration: whole-history link + old desktop links → per-project sharing; undo restores <span class="d">(20 checks)</span>
+<span class="p">✓</span> crash mid-operation (process killed between steps) → rolled back on next start <span class="d">(11 checks)</span>
+<span class="p">✓</span> a failing step rolls back automatically <span class="d">(8 checks)</span>
+<span class="p">✓</span> desktop sync: two-way, conflict = newest wins and the loser is kept <span class="d">(9 checks)</span>
+<span class="p">✓</span> desktop sync is safe with atomic-rename writes <span class="d">(5 checks)</span>
+<span class="p">✓</span> unshare hides the project’s chats from the account’s desktop apps (never account 1’s); idempotent; undo <span class="d">(17 checks)</span>
+<span class="p">✓</span> read-only mode (used for real-machine checks) never writes <span class="d">(4 checks)</span>
+<span class="d">  … 30 more</span>
+
+<span class="hi">39/39 tests passed, 368 checks, 2.2s — sandbox only (real HOME never touched)</span></pre>
+          </div>
+          <div class="tbl">
+            <table>
+              <thead><tr><th>Area</th><th>What the tests prove</th></tr></thead>
+              <tbody>
+                <tr><td>Engine</td><td>Restores are byte-for-byte; a corrupted snapshot fails verification; a failing step rolls back; retention never prunes the newest 5, pinned or quarantined snapshots; read-only mode writes nothing.</td></tr>
+                <tr><td>Crash</td><td>A child process is killed with <code>SIGKILL</code> after step 3 of a migration. The journal is left <code>applying</code>, Doctor flags it, and recovery restores every watched folder exactly.</td></tr>
+                <tr><td>Sharing</td><td>Share and unshare change only links; merging private history adds files only; migration from whole-folder links works and undoes.</td></tr>
+                <tr><td>Sync</td><td>Two-way, newest wins with the loser kept, safe with atomic-rename writes, never writes to a running app.</td></tr>
+                <tr><td>Hide and restore</td><td>Only the account's own apps are hidden from, never account 1's; idempotent; a newer file is kept on restore.</td></tr>
+                <tr><td>Desktop apps</td><td>Create, recolor, update and remove through the engine; adopting an existing data folder leaves it untouched; tidy-up never touches another tool's folders.</td></tr>
+                <tr><td>Fair use</td><td>Eight tests: kind detection from non-secret fields, attestation, the second-plan tick, no limit-dodging paths in the UI, Work notices, suspension detection, the usage gate, single-person scope.</td></tr>
+                <tr><td>Tray</td><td>Popover placement across displays; the popover runs sandboxed and goes through the same gates as the main window.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="prose">
+            <p><strong>On a real Mac,</strong> <code>npm run check:real</code> runs Doctor and the migration preview against your actual folders in read-only mode, where every write path in the engine throws, and compares a listing of Baton's state folder before and after to prove nothing changed. <strong>For screenshots,</strong> <code>npm run shots</code> runs the real app against a generated fake home with <code>claude</code> and <code>osascript</code> blocked and every preview cancelled.</p>
+            <p><strong>Not covered by automated tests:</strong> the Swift helper, most of the IPC wiring, the React UI, and real interaction with Claude.app and the <code>claude</code> CLI. Those are checked by hand against real installs, which is why every fact about Claude's file layout in the code carries the Claude version it was verified on.</p>
+          </div>
+        </section>
+
+        <section id="limits" aria-labelledby="limits-h">
+          <p class="sec-num">10</p>
+          <h2 id="limits-h">What could break</h2>
+          <ul class="limits">
+            <li><b>Undocumented formats</b><span>The sidebar index files, the project-folder naming, the desktop config's account id and the text of <code>/usage</code> are Anthropic's implementation details. A Claude update can change them. Baton copies index files as opaque bytes and Doctor reports what it can't read, but a change can stop sync or titles until Baton is updated.</span></li>
+            <li><b>Where desktop transcripts go</b><span>Desktop sharing relies on the Code tab writing every transcript to <code>~/.claude/projects</code>. If Claude changes that, this part needs a new design.</span></li>
+            <li><b>First sign-in in a new app copy</b><span>Clones share Claude's bundle id, so the login callback goes to whichever Claude app is running. Baton asks the others to quit first.</span></li>
+            <li><b>Apple silicon, macOS, Terminal.app</b><span>Release builds are arm64 only; an Intel build from source is untested. Launches use Terminal.app.</span></li>
+            <li><b>Some steps are undone by hand</b><span>Trash moves come back with Finder › Put Back; a removed app copy is rebuilt the next time you open it.</span></li>
+            <li><b>Optional usage capture edits one setting</b><span>If you turn it on for an account, Baton changes the <code>statusLine</code> key in that account's <code>settings.json</code>, after a confirm that shows the before and after, with a backup of the whole file and a restore when you turn it off. For account 1 that file is <code>~/.claude/settings.json</code>: the one place Baton can write inside <code>~/.claude</code>, and only after a warning.</span></li>
+            <li><b>Removing an account</b><span>Its folder goes to the Trash, but its Keychain sign-in item stays, because Baton never touches the Keychain.</span></li>
+          </ul>
+          <p class="note">Releases are signed with a Developer ID, built with the hardened runtime, notarized by Apple and verified with <code>codesign</code>, <code>spctl</code> and <code>stapler</code> before publishing, with a <code>SHA256SUMS.txt</code> next to the DMG. The steps are in <a href="https://github.com/vamsijanaki/baton/blob/main/RELEASING.md">RELEASING.md</a>.</p>
+        </section>
+
+        <section id="code" aria-labelledby="code-h">
+          <p class="sec-num">11</p>
+          <h2 id="code-h">Read the code</h2>
+          <ul class="code-links">
+            <li><a href="https://github.com/vamsijanaki/baton/blob/main/electron/safety.ts"><code>electron/safety.ts</code><span>The safety engine: guard list, snapshots, journal, apply, verify, rollback, undo.</span></a></li>
+            <li><a href="https://github.com/vamsijanaki/baton/blob/main/electron/sharing.ts"><code>electron/sharing.ts</code><span>Per-project links, the index sync engine, hide and restore, migration, Doctor.</span></a></li>
+            <li><a href="https://github.com/vamsijanaki/baton/blob/main/electron/desktop.ts"><code>electron/desktop.ts</code><span>APFS clones of Claude.app and launching them with their own data folder.</span></a></li>
+            <li><a href="https://github.com/vamsijanaki/baton/blob/main/electron/apps.ts"><code>electron/apps.ts</code><span>Pairing desktop apps with accounts by email; merge and tidy up.</span></a></li>
+            <li><a href="https://github.com/vamsijanaki/baton/blob/main/electron/fairuse.ts"><code>electron/fairuse.ts</code><span>Account kind, attestation, suspension detection, the usage gate and the launch gate.</span></a></li>
+            <li><a href="https://github.com/vamsijanaki/baton/blob/main/electron/usage.ts"><code>electron/usage.ts</code><span>Usage limits from the official CLI, and the optional status-line capture.</span></a></li>
+            <li><a href="https://github.com/vamsijanaki/baton/blob/main/electron/core.ts"><code>electron/core.ts</code><span>Accounts, session titles, process detection, environment scrubbing, launch scripts.</span></a></li>
+            <li><a href="https://github.com/vamsijanaki/baton/blob/main/electron/roots.ts"><code>electron/roots.ts</code><span>Every filesystem root in one place, and read-only mode.</span></a></li>
+            <li><a href="https://github.com/vamsijanaki/baton/blob/main/helper/baton-desktop-helper.swift"><code>helper/baton-desktop-helper.swift</code><span>The Swift helper: tint an icon, set it, focus or quit an app.</span></a></li>
+            <li><a href="https://github.com/vamsijanaki/baton/blob/main/scripts/test.ts"><code>scripts/test.ts</code><span>The sandbox test suite, including the SIGKILL crash test.</span></a></li>
+            <li><a href="https://github.com/vamsijanaki/baton/blob/main/ARCHITECTURE.md"><code>ARCHITECTURE.md</code><span>This page in more depth, with function names for every claim.</span></a></li>
+            <li><a href="https://github.com/vamsijanaki/baton/blob/main/FAIR-USE.md"><code>FAIR-USE.md</code><span>What Baton is for, and what it won't help with.</span></a></li>
+          </ul>
+        </section>
+      </article>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-top">
+      <a class="brand" href="/" aria-label="Baton home"><svg aria-hidden="true"><use href="#i-mark"/></svg>Baton</a>
+      <nav class="foot-links" aria-label="Footer">
+        <a href="/download">Download</a>
+        <a href="/how-it-works/">How it works</a>
+        <a href="https://github.com/vamsijanaki/baton">GitHub</a>
+        <a href="https://github.com/sponsors/vamsijanaki">Sponsor</a>
+        <a href="https://github.com/vamsijanaki/baton/blob/main/FAIR-USE.md">Fair use</a>
+      </nav>
+    </div>
+    <div class="foot-fine">
+      <p>Not affiliated with or endorsed by Anthropic. Claude is a trademark of Anthropic.</p>
+      <p>MIT © 2026 Vamsi Janaki</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var nav = document.getElementById('nav');
+  var onScroll = function () { nav.classList.toggle('scrolled', window.scrollY > 8); };
+  window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
+  if (!('IntersectionObserver' in window)) return;
+  var links = {};
+  document.querySelectorAll('.toc a').forEach(function (a) { links[a.getAttribute('href').slice(1)] = a; });
+  var current = null;
+  var io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      if (current) current.classList.remove('on');
+      current = links[e.target.id];
+      if (current) current.classList.add('on');
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  document.querySelectorAll('article > section[id]').forEach(function (s) { io.observe(s); });
+})();
+</script>
+</body>
+</html>
