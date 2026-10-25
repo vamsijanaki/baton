@@ -15,6 +15,8 @@ import * as apps from '../electron/apps';
 import * as fairuse from '../electron/fairuse';
 import * as trayLogic from '../electron/tray-logic';
 import * as usageHook from '../electron/usage-hook';
+import * as upd from '../electron/update-logic';
+import * as feed from './update-feed.mjs';
 import type { Account } from '../electron/core';
 import * as lib from '../src/lib';
 
@@ -1437,6 +1439,267 @@ test('usage hook: no settings.json write outside the engine (main.ts / usage.ts)
   ok(!/installHook|uninstallHook|ipcMain\.handle\('usageHook'/.test(main + usage), 'old direct install/uninstall paths are gone');
   ok(!/writeFileSync|renameSync|unlinkSync|rmSync/.test(hook), 'usage-hook.ts only plans (the engine writes)');
   ok(!/settings\.json[\s\S]{0,200}writeFileSync/.test(usage), 'usage.ts writes no settings.json');
+});
+
+// ---------- in-app updates ----------
+
+/** Fake clock + timers for the update controller. */
+function fakeClock(t0 = 1_900_000_000_000) {
+  let now = t0;
+  let seq = 0;
+  const timers = new Map<number, { at: number; fn: () => void }>();
+  return {
+    now: () => now,
+    setTimer: (fn: () => void, ms: number) => (timers.set(++seq, { at: now + ms, fn }), seq),
+    clearTimer: (h: unknown) => void timers.delete(h as number),
+    pending: () => timers.size,
+    async advance(ms: number) {
+      const end = now + ms;
+      for (;;) {
+        const next = [...timers.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+        if (!next || next[1].at > end) break;
+        timers.delete(next[0]);
+        now = next[1].at;
+        next[1].fn();
+        await new Promise((r) => setImmediate(r));
+      }
+      now = end;
+      await new Promise((r) => setImmediate(r));
+    },
+  };
+}
+
+function controller(o: { supported?: boolean; auto?: boolean; found?: upd.Found | null; blocker?: () => string | null } = {}) {
+  const clock = fakeClock();
+  const calls: Record<"check" | "download" | "install" | "prepare", number> & { order: string[] } = { check: 0, download: 0, install: 0, prepare: 0, order: [] };
+  let auto = o.auto ?? true;
+  let last: number | null = null;
+  const c = new upd.UpdateController({
+    currentVersion: '1.1.0',
+    support: () => (o.supported === false ? { enabled: false, reason: 'Updates are only available in signed releases.' } : { enabled: true, reason: null }),
+    autoCheck: () => auto,
+    setAutoCheck: (v) => (auto = v),
+    lastCheckAt: () => last,
+    setLastCheckAt: (t) => (last = t),
+    check: async () => (calls.check++, o.found === undefined ? { version: '1.1.1', date: null, notes: [{ version: '1.1.1', text: 'Fixed: x' }] } : o.found),
+    download: async (progress) => (calls.download++, progress(50), progress(100)),
+    blocker: o.blocker ?? (() => null),
+    prepareInstall: () => (calls.prepare++, calls.order.push('prepare')),
+    install: () => (calls.install++, calls.order.push('install')),
+    emit: () => undefined,
+    now: clock.now,
+    setTimer: clock.setTimer,
+    clearTimer: clock.clearTimer,
+  });
+  return { c, clock, calls, setAuto: (v: boolean) => (auto = v), last: () => last };
+}
+
+test('updates: "Check for updates automatically" defaults ON, a toggle persists, other settings keep it', () => {
+  ok(safety.readSettings().autoUpdateCheck === true, 'no settings file: ON');
+  fs.mkdirSync(path.dirname(roots.settingsFile()), { recursive: true });
+  fs.writeFileSync(roots.settingsFile(), JSON.stringify({ retention: 20, syncEnabled: true, onboarded: true, sameAccountSync: false }));
+  ok(safety.readSettings().autoUpdateCheck === true, 'a settings file from before the option: ON');
+  safety.writeSettings({ autoUpdateCheck: false });
+  ok(safety.readSettings().autoUpdateCheck === false, 'turned off: persisted');
+  safety.writeSettings({ retention: 30 });
+  ok(safety.readSettings().autoUpdateCheck === false && safety.readSettings().retention === 30, 'another setting written: still off');
+  safety.writeSettings({ autoUpdateCheck: true });
+  ok(JSON.parse(fs.readFileSync(roots.settingsFile(), 'utf8')).autoUpdateCheck === true, 'turned back on: on disk');
+  ok(roots.updateStateFile().startsWith(roots.roots().appDir), 'last-check time lives in Baton’s own folder');
+});
+
+test('updates: checks on launch + once a day; off = never contacted; Check now always; unsupported never', async () => {
+  const D = upd.DAY_MS;
+  const t = 1_900_000_000_000;
+  const base = { supported: true, autoCheck: true, lastCheckAt: t, now: t, busy: false };
+  ok(upd.shouldCheck('launch', base), 'launch: checks (auto on)');
+  ok(!upd.shouldCheck('timer', { ...base, now: t + D - 1 }), 'timer: not before a day has passed');
+  ok(upd.shouldCheck('timer', { ...base, now: t + D }), 'timer: after a day');
+  ok(upd.shouldCheck('timer', { ...base, lastCheckAt: null }), 'timer: never checked');
+  ok(upd.shouldCheck('timer', { ...base, now: t - 60_000 }), 'clock moved backwards: not stuck forever');
+  for (const tr of ['launch', 'timer'] as const) ok(!upd.shouldCheck(tr, { ...base, autoCheck: false, lastCheckAt: null }), `auto off: no ${tr} check`);
+  ok(upd.shouldCheck('manual', { ...base, autoCheck: false }), 'auto off: Check now still checks');
+  for (const tr of ['launch', 'timer', 'manual'] as const) ok(!upd.shouldCheck(tr, { ...base, supported: false, lastCheckAt: null }), `unsupported build: no ${tr} check`);
+  ok(!upd.shouldCheck('manual', { ...base, busy: true }), 'no second check while one runs');
+
+  // the controller with a fake clock: one check at launch, one a day after, nothing in between
+  const a = controller();
+  a.c.start();
+  await a.clock.advance(0);
+  ok(+a.calls.check === 1 && a.last() === a.clock.now(), 'launch check ran and was recorded');
+  ok(a.c.status().phase === 'available' && a.c.badge()?.version === '1.1.1' && !a.c.badge()?.ready, 'update found: badge says available');
+  await a.clock.advance(D - upd.TIMER_MS);
+  ok(+a.calls.check === 1, 'no further check within the day (and not while an update is already found)');
+  const b = controller({ found: null });
+  b.c.start();
+  await b.clock.advance(0);
+  ok(+b.calls.check === 1 && b.c.status().phase === 'up-to-date' && b.c.badge() === null, 'up to date: no badge');
+  await b.clock.advance(D - upd.TIMER_MS);
+  ok(+b.calls.check === 1, 'hourly wake-ups do not check within the day');
+  await b.clock.advance(upd.TIMER_MS);
+  ok(+b.calls.check === 2, 'checked again after a day');
+  await b.clock.advance(3 * D);
+  ok(+b.calls.check === 5, 'exactly once a day');
+
+  // off: nothing at launch, nothing over days; Check now works
+  const off = controller({ auto: false, found: null });
+  off.c.start();
+  await off.clock.advance(5 * D);
+  ok(+off.calls.check === 0 && off.last() === null, 'auto off: no check at launch or over 5 days');
+  await off.c.checkNow();
+  ok(+off.calls.check === 1, 'Check now checks');
+  off.c.setAutoCheck(true);
+  await off.clock.advance(D);
+  ok(+off.calls.check === 2, 'turned on: the daily check resumes');
+  off.c.setAutoCheck(false);
+  await off.clock.advance(3 * D);
+  ok(+off.calls.check === 2, 'turned off again: stops');
+
+  // unsupported (unsigned/dev, dry run, fake HOME): nothing ever, not even Check now
+  const un = controller({ supported: false });
+  un.c.start();
+  await un.clock.advance(3 * D);
+  await un.c.checkNow();
+  await un.c.download();
+  ok(+un.calls.check === 0 && +un.calls.download === 0 && un.c.status().reason === 'Updates are only available in signed releases.', 'unsupported: nothing runs, reason shown');
+
+  // a failed check counts as a check (no retry storm), error shown
+  const err = controller();
+  (err.c as any).d.check = async () => {
+    throw new Error('getaddrinfo ENOTFOUND github.com');
+  };
+  await err.c.checkNow();
+  ok(err.c.status().phase === 'error' && /ENOTFOUND/.test(err.c.status().error!) && err.last() !== null, 'failed check: error shown, time recorded');
+});
+
+test('updates: "Restart to update" waits while a safety operation runs, then flushes and installs', async (s) => {
+  let ops = 1;
+  const blocker = () => upd.installBlocker({ opsInFlight: ops, journalApplying: safety.listJournal().filter((j) => j.status === 'applying').length });
+  const x = controller({ blocker });
+  await x.c.checkNow();
+  ok(x.c.restart().phase === 'available', 'restart before download does nothing');
+  await x.c.download();
+  ok(x.c.status().phase === 'downloaded' && x.c.status().progress === 100 && x.c.badge()?.ready === true, 'downloaded: badge says restart');
+  const st = x.c.restart();
+  ok(st.phase === 'waiting' && /operation/.test(st.waitingFor ?? '') && +x.calls.install === 0 && +x.calls.prepare === 0, 'an operation is running: restart waits, nothing installed');
+  ok(x.c.restart().phase === 'waiting' && x.clock.pending() === 1, 'pressing again does not stack waits');
+  // the operation ends, but a journal entry is still "applying" (e.g. between steps): still waits
+  ops = 0;
+  fs.mkdirSync(roots.journalDir(), { recursive: true });
+  const jf = path.join(roots.journalDir(), 'j-test.json');
+  fs.writeFileSync(jf, JSON.stringify({ id: 'j-test', kind: 'share', title: 't', createdAt: new Date().toISOString(), status: 'applying', steps: [], done: 0, snapshotId: 'x', touches: [] }));
+  await x.clock.advance(upd.IDLE_POLL_MS * 3);
+  ok(+x.calls.install === 0 && x.c.status().phase === 'waiting', 'journal in progress: still waiting');
+  fs.writeFileSync(jf, JSON.stringify({ ...JSON.parse(fs.readFileSync(jf, 'utf8')), status: 'done' }));
+  await x.clock.advance(upd.IDLE_POLL_MS);
+  ok(+x.calls.install === 1 && +x.calls.prepare === 1 && x.calls.order.join(',') === 'prepare,install', 'idle: state flushed (ops frozen) first, then installed — once');
+  ok(x.c.status().phase === 'installing' && x.clock.pending() <= 1, 'installing');
+  // idle from the start: immediate
+  const y = controller();
+  await y.c.checkNow();
+  await y.c.download();
+  y.c.restart();
+  ok(y.calls.order.join(',') === 'prepare,install', 'idle: installs right away');
+  // Squirrel refuses (e.g. signature mismatch): Baton keeps running and says why
+  y.c.installFailed(new Error('Code signature at URL … did not pass validation'));
+  ok(y.c.status().phase === 'error' && /signature/.test(y.c.status().error!), 'refused install: error shown');
+  // the main process wiring: ops are frozen and state saved before quitAndInstall; aborted install unfreezes
+  const repo = path.resolve(__dirname, '..');
+  const main = fs.readFileSync(path.join(repo, 'electron', 'main.ts'), 'utf8');
+  const ops_ = fs.readFileSync(path.join(repo, 'electron', 'ops-ipc.ts'), 'utf8');
+  ok(/prepareInstall: \(\) => \{\s*freezeOps\(true\);[\s\S]{0,120}saveState\(state\);[\s\S]{0,120}quitting = true;/.test(main), 'main: freeze ops, flush state, let windows close');
+  ok(/installBlocker\(\{ opsInFlight: opsInFlight\(\), journalApplying: listJournal\(\)\.filter\(\(j\) => j\.status === 'applying'\)\.length \}\)/.test(main), 'main: blocker = ops in flight + journal applying');
+  ok(/if \(frozen\) return Promise\.reject/.test(ops_) && /if \(frozen \|\| !safety\.readSettings\(\)\.syncEnabled\) return;/.test(ops_) && /inFlight\+\+;\s*try \{\s*return await quitApply/.test(ops_), 'ops: frozen refuses new work; sync passes skip; quit-and-apply counted');
+});
+
+test('updates: never in unsigned/dev builds, dry run, a fake HOME or the disk image; signature must be Baton’s', () => {
+  const base = { packaged: true, signature: 'developer-id' as const, envDryRun: false, fakeHome: false, appPath: '/Applications/Baton.app' };
+  ok(upd.updateSupport(base).enabled, 'signed release in /Applications: on');
+  ok(upd.updateSupport({ ...base, packaged: false }).reason === 'Updates are only available in signed releases.', 'dev build: off');
+  ok(upd.updateSupport({ ...base, signature: 'other' }).reason === 'Updates are only available in signed releases.', 'ad-hoc build: off');
+  ok(!upd.updateSupport({ ...base, signature: 'pending' }).enabled, 'signature not known yet: off');
+  ok(!upd.updateSupport({ ...base, envDryRun: true }).enabled && !upd.updateSupport({ ...base, fakeHome: true }).enabled, 'dry run / fake HOME: off');
+  ok(!upd.updateSupport({ ...base, appPath: '/Volumes/Baton 1.1.0/Baton.app' }).enabled, 'running from the DMG: off (cannot replace)');
+  ok(!upd.updateSupport({ ...base, appPath: '/private/var/folders/x/AppTranslocation/ABC/d/Baton.app' }).enabled, 'translocated: off');
+  const good = 'Executable=/Applications/Baton.app/Contents/MacOS/Baton\nIdentifier=com.vamsijanaki.baton\nAuthority=Developer ID Application: Vamsi Krishna Janaki (D9S4VXPF9P)\nAuthority=Developer ID Certification Authority\nTeamIdentifier=D9S4VXPF9P\n';
+  ok(upd.signatureKind(good) === 'developer-id', 'Baton’s Developer ID: recognised');
+  ok(upd.signatureKind('Identifier=com.vamsijanaki.baton\nSignature=adhoc\nTeamIdentifier=not set\n') === 'other', 'ad-hoc: other');
+  ok(upd.signatureKind(good.replace(/D9S4VXPF9P/g, 'ABCDE12345')) === 'other', 'another team: other');
+  ok(upd.signatureKind(good.replace('com.vamsijanaki.baton', 'com.example.app')) === 'other', 'another bundle id: other');
+  ok(upd.isFakeHome('/tmp/x/home', '/Users/me') && !upd.isFakeHome('/Users/me/', '/Users/me') && upd.isFakeHome('/Users/me', '/Users/me', '/tmp/fake'), 'fake HOME detection');
+  ok(upd.isFakeHome(roots.roots().home, REAL_HOME), 'this test sandbox counts as a fake HOME');
+  // the updater module is only loaded when allowed, points at this repo only, and main has no other update path
+  const repo = path.resolve(__dirname, '..');
+  const u = fs.readFileSync(path.join(repo, 'electron', 'updater.ts'), 'utf8');
+  const main = fs.readFileSync(path.join(repo, 'electron', 'main.ts'), 'utf8');
+  ok(!/^import .*electron-updater/m.test(u) && /if \(!support\(\)\.enabled\) throw[\s\S]{0,200}require\('electron-updater'\)/.test(u), 'electron-updater is loaded lazily, only when updates are allowed');
+  ok(/autoDownload = false/.test(u) && /autoInstallOnAppQuit = false/.test(u) && /allowPrerelease = false/.test(u), 'no silent download/install, no prereleases');
+  ok(upd.UPDATE_FEED.owner === 'vamsijanaki' && upd.UPDATE_FEED.repo === 'baton' && upd.UPDATE_FEED.provider === 'github', 'feed: GitHub Releases of vamsijanaki/baton');
+  ok(!/electron-updater|checkForUpdates|net\.request|fetch\(/.test(main), 'main.ts makes no network calls of its own');
+  const pkg = JSON.parse(fs.readFileSync(path.join(repo, 'package.json'), 'utf8'));
+  const pub = pkg.build.publish?.[0];
+  ok(pub?.provider === 'github' && pub.owner === 'vamsijanaki' && pub.repo === 'baton', 'electron-builder writes latest-mac.yml for GitHub');
+  ok(pkg.build.mac.target.includes('zip') && pkg.build.dmg.artifactName === 'Baton-${arch}.dmg', 'zip target kept (Squirrel needs it); stable DMG name kept');
+  ok(!pkg.dependencies?.['electron-updater'] && /^\d+\.\d+\.\d+$/.test(pkg.devDependencies['electron-updater']), 'electron-updater pinned, bundled into main.js (not copied as node_modules)');
+});
+
+test('updates: release notes are plain text (HTML from GitHub is never rendered)', () => {
+  const html = '<h3>Added</h3>\n<ul>\n<li>In-app updates &amp; more</li>\n<li><strong>Bold</strong> <a href="https://x">link</a></li>\n</ul><script>alert(1)</script><p>a &lt;b&gt; &#39;c&#39;</p>';
+  const t = upd.htmlToText(html);
+  ok(!/[<>]/.test(t.replace('a <b>', '')) && !/alert/.test(t), 'tags and scripts gone');
+  ok(t.includes('• In-app updates & more') && t.includes('• Bold link') && t.includes("a <b> 'c'"), `lists and entities kept (${JSON.stringify(t)})`);
+  const multi = upd.releaseNotes([{ version: '1.1.2', note: '<p>two</p>' }, { version: '1.1.1', note: null }], '1.1.2');
+  ok(multi.length === 1 && multi[0].version === '1.1.2' && multi[0].text === 'two', 'empty notes dropped, versions kept');
+  ok(upd.releaseNotes('<p>one</p>', '1.1.1')[0].text === 'one' && upd.releaseNotes(null, '1') .length === 0, 'single string / none');
+  const ui = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'Settings.tsx'), 'utf8');
+  ok(!/dangerouslySetInnerHTML/.test(ui), 'Settings never renders HTML');
+});
+
+test('release feed: latest-mac.yml must match the zip (sha512 + size); stapled DMG entry refreshed; blockmap required', (s) => {
+  const rel = path.join(s.root, 'release');
+  fs.mkdirSync(rel);
+  const v = '1.1.0';
+  const zip = path.join(rel, feed.zipName(v));
+  const dmg = path.join(rel, 'Baton-arm64.dmg');
+  fs.writeFileSync(zip, crypto.randomBytes(4096));
+  fs.writeFileSync(dmg, crypto.randomBytes(2048));
+  const entry = (f: string) => ({ url: path.basename(f), sha512: feed.sha512b64(f), size: fs.statSync(f).size });
+  const write = (o: Partial<ReturnType<typeof feed.parseFeed>> = {}) =>
+    fs.writeFileSync(
+      path.join(rel, feed.FEED_FILE),
+      feed.serializeFeed({ version: v, files: [entry(zip), entry(dmg)], path: path.basename(zip), sha512: feed.sha512b64(zip), releaseDate: '2026-11-01T00:00:00.000Z', extra: {}, ...o } as any),
+    );
+  write();
+  ok(feed.verifyFeed(rel, v).some((p) => /blockmap/.test(p)), 'missing blockmap is a problem');
+  fs.writeFileSync(`${zip}.blockmap`, 'x');
+  ok(feed.verifyFeed(rel, v).length === 0, 'matching feed: no problems');
+  const text = fs.readFileSync(path.join(rel, feed.FEED_FILE), 'utf8');
+  ok(feed.serializeFeed(feed.parseFeed(text)) === text, 'parse → serialize round-trips exactly');
+  ok(feed.verifyFeed(rel, '1.1.1').some((p) => /is for 1\.1\.0/.test(p)), 'wrong version is a problem');
+  // the DMG is stapled after electron-builder wrote the feed → its entry is stale until refreshed
+  fs.appendFileSync(dmg, 'stapled-ticket');
+  ok(feed.verifyFeed(rel, v).some((p) => /Baton-arm64\.dmg does not match/.test(p)), 'stale DMG entry is caught');
+  ok(feed.refreshFeedEntry(rel, 'Baton-arm64.dmg') && feed.verifyFeed(rel, v).length === 0, 'refreshed: good again');
+  ok(!feed.refreshFeedEntry(rel, 'Baton-arm64.dmg'), 'nothing to refresh the second time');
+  // a zip that changed after the feed was written must never pass (the updater would refuse it — or worse)
+  fs.appendFileSync(zip, 'x');
+  const pz = feed.verifyFeed(rel, v);
+  ok(pz.some((p) => /sha512 does not match Baton-1\.1\.0-arm64-mac\.zip/.test(p)) && pz.some((p) => /entry for Baton-1\.1\.0-arm64-mac\.zip/.test(p)), 'changed zip: top-level and entry mismatch reported');
+  ok(!feed.refreshFeedEntry(rel, 'nope.zip'), 'unknown file: not added');
+  write({ path: 'Other.zip' });
+  ok(feed.verifyFeed(rel, v).some((p) => /path is Other\.zip/.test(p)), 'feed pointing at another file is a problem');
+  fs.writeFileSync(path.join(rel, feed.FEED_FILE), 'version: 1.1.0\n???\n');
+  ok(feed.verifyFeed(rel, v).some((p) => /unexpected line/.test(p)), 'unknown shape is refused, not guessed');
+  fs.rmSync(path.join(rel, feed.FEED_FILE));
+  ok(feed.verifyFeed(rel, v).some((p) => /missing latest-mac\.yml/.test(p)), 'missing feed is a problem');
+  // the release scripts use it, and upload the feed last
+  const repo = path.resolve(__dirname, '..');
+  const art = fs.readFileSync(path.join(repo, 'scripts', 'release-artifacts.mjs'), 'utf8');
+  const pubs = fs.readFileSync(path.join(repo, 'scripts', 'release-publish.mjs'), 'utf8');
+  const wf = fs.readFileSync(path.join(repo, '.github', 'workflows', 'release.yml'), 'utf8');
+  ok(/refreshFeedEntry\(rel, path\.basename\(dmg\)\)/.test(art) && /verifyFeed\(rel, version\)/.test(art) && /codesign', \['-d', '-r-'/.test(art), 'release-artifacts: refresh DMG entry, verify feed, check the zip app’s designated requirement');
+  ok(/FEED_FILE\]/.test(pubs) && /\.blockmap`/.test(pubs) && /verifyFeed\(rel, version\)/.test(pubs) && /files\.slice\(0, -1\)/.test(pubs), 'release-publish: uploads blockmap + latest-mac.yml (last), verifies first');
+  ok(/release\/latest-mac\.yml/.test(wf) && /arm64-mac\.zip\.blockmap/.test(wf) && /delete-asset "\$TAG" latest-mac\.yml/.test(wf), 'fallback workflow: feed only for signed builds');
 });
 
 // ---------- runner ----------

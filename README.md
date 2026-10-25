@@ -111,6 +111,7 @@ And also:
 - **Doctor** — checks links, sync, app copies, disk space, interrupted operations and snapshot integrity.
 - **Keyboard first** — `⌘↩` continue · `⌘F` search · `⌘1…9` account · `⌘P` project · `⌘N` add account · `⌘R` refresh · `⌘/` help.
 - **Private by design** — never reads tokens or the Keychain, never modifies Claude Code or Claude.app, no servers, no telemetry.
+- **In-app updates** — Settings › Updates checks GitHub Releases for a new version (on launch and once a day; turn it off and nothing is contacted unless you press Check now), shows the release notes, downloads, verifies the signature and restarts when Baton is idle. That check is the only network request Baton makes itself; it sends no identifiers and no telemetry.
 
 ## Install
 
@@ -216,7 +217,7 @@ No. Baton never reads, copies or stores credentials, and never touches the Keych
 <details>
 <summary><strong>Does it upload anything?</strong></summary>
 
-No. Baton has no server and no telemetry. Everything stays on your Mac, and the source is here to check.
+No. Baton has no server and no telemetry. Everything stays on your Mac, and the source is here to check. The one request Baton makes on its own is the optional update check: it asks GitHub Releases (github.com/vamsijanaki/baton) whether there is a newer version, on launch and once a day, and sends nothing about you or your accounts. Turn off Settings › Updates › "Check for updates automatically" and Baton contacts nothing unless you press Check now.
 
 </details>
 

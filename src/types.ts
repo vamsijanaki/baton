@@ -42,6 +42,8 @@ export interface Snapshot {
   sharedProjects: string[];
   onboarded: boolean;
   home: string;
+  /** A newer Baton is available (ready = downloaded, waiting for "Restart to update"). */
+  update?: { version: string; ready: boolean } | null;
 }
 export type AccountKind = 'personal' | 'work';
 export interface FairUseInfo {
@@ -114,7 +116,9 @@ export interface HistoryItem {
 export interface SnapshotInfo { id: string; op: string; title: string; createdAt: string; category: 'op' | 'sync'; pinned: boolean; roots: string[]; verified: boolean; bytes: number; quarantined: number; entryCount: number }
 export interface RestoreItem { path: string; snapType: 'absent' | 'file' | 'dir' | 'symlink'; current: 'same' | 'different' | 'missing' | 'extra' }
 export interface DoctorCheck { id: string; level: 'ok' | 'info' | 'warn' | 'error'; title: string; detail: string; fix?: { kind: string; label: string; args?: unknown } }
-export interface Settings { retention: number; syncEnabled: boolean; onboarded: boolean; sameAccountSync: boolean }
+export type { UpdateStatus } from '../electron/update-logic';
+import type { UpdateStatus } from '../electron/update-logic';
+export interface Settings { retention: number; syncEnabled: boolean; onboarded: boolean; sameAccountSync: boolean; autoUpdateCheck: boolean }
 export interface AppInfo {
   id: string;
   name: string;
@@ -233,7 +237,12 @@ declare global {
       reveal(p: string): Promise<void>;
       openLog(): Promise<void>;
       clearLock(): Promise<void>;
-      on(ch: 'changed' | 'route' | 'conflict' | 'launchBlocked', fn: (p: any) => void): () => void;
+      updateStatus(): Promise<UpdateStatus>;
+      updateCheck(): Promise<UpdateStatus>;
+      updateDownload(): Promise<UpdateStatus>;
+      updateRestart(): Promise<UpdateStatus>;
+      updateSetAuto(v: boolean): Promise<UpdateStatus>;
+      on(ch: 'changed' | 'route' | 'conflict' | 'launchBlocked' | 'update', fn: (p: any) => void): () => void;
     };
   }
 }

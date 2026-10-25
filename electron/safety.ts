@@ -30,6 +30,8 @@ export interface Settings {
   onboarded: boolean;
   /** Every desktop app signed in as the same account shows the same Code sidebar (index files synced between them). */
   sameAccountSync: boolean;
+  /** Check GitHub Releases for a new Baton version on launch and once a day. Default ON; off = nothing is contacted unless you press Check now. */
+  autoUpdateCheck: boolean;
 }
 /**
  * Defaults. sameAccountSync is ON for a new setup (no settings file yet); an existing setup that predates the
@@ -37,9 +39,9 @@ export interface Settings {
  */
 export function readSettings(): Settings {
   try {
-    return { retention: 20, syncEnabled: true, onboarded: false, sameAccountSync: false, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf8')) };
+    return { retention: 20, syncEnabled: true, onboarded: false, sameAccountSync: false, autoUpdateCheck: true, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf8')) };
   } catch {
-    return { retention: 20, syncEnabled: true, onboarded: false, sameAccountSync: true };
+    return { retention: 20, syncEnabled: true, onboarded: false, sameAccountSync: true, autoUpdateCheck: true };
   }
 }
 export function writeSettings(patch: Partial<Settings>) {

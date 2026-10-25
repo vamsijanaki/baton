@@ -14,8 +14,13 @@
 # Assets uploaded to the release:
 #   Baton-arm64.dmg               stable name — https://github.com/vamsijanaki/baton/releases/latest/download/Baton-arm64.dmg
 #   Baton-X.Y.Z-arm64.dmg         versioned copy of the same DMG
-#   Baton-X.Y.Z-arm64-mac.zip     zipped .app (for a future auto-updater)
+#   Baton-X.Y.Z-arm64-mac.zip     zipped .app (what the in-app updater installs)
 #   SHA256SUMS.txt                `shasum -a 256 -c SHA256SUMS.txt` to verify
+#   Baton-X.Y.Z-arm64-mac.zip.blockmap, latest-mac.yml
+#                                 the in-app updater's feed — SIGNED builds only. An ad-hoc build would be refused by
+#                                 Squirrel.Mac in every signed Baton, so for an ad-hoc build the feed is not uploaded
+#                                 and any existing latest-mac.yml on the release is removed (it would describe a zip
+#                                 that is no longer there).
 # Release notes = the "## [X.Y.Z]" section of CHANGELOG.md (scripts/changelog-notes.mjs).
 #
 # Optional signing / notarization secrets (none are set today). scripts/dist.mjs signs as the package.json
@@ -139,6 +144,7 @@ jobs:
       - name: Create or update GitHub Release
         if: github.event_name == 'workflow_dispatch' || steps.signing.outputs.sign == 'true'
         env:
+          SIGNED: ${{ steps.signing.outputs.sign }}
           REPLACE: ${{ inputs.replace_existing || steps.signing.outputs.sign == 'true' }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.ver.outputs.version }}
@@ -149,6 +155,7 @@ jobs:
             "release/Baton-${VERSION}-arm64-mac.zip"
             "release/SHA256SUMS.txt"
           )
+          if [ "$SIGNED" = "true" ]; then FILES+=("release/Baton-${VERSION}-arm64-mac.zip.blockmap"); fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             if [ "$REPLACE" != "true" ]; then
               echo "::error::Release $TAG already exists. Re-run with replace_existing to overwrite its assets."; exit 1
@@ -162,5 +169,11 @@ jobs:
               --notes-file "$RUNNER_TEMP/notes.md" \
               --verify-tag \
               --latest
+          fi
+          # in-app updater feed: last, after the zip it describes; never for an ad-hoc build
+          if [ "$SIGNED" = "true" ]; then
+            gh release upload "$TAG" "release/latest-mac.yml" --clobber
+          else
+            gh release delete-asset "$TAG" latest-mac.yml -y >/dev/null 2>&1 || true
           fi
           echo "Published: https://github.com/$GH_REPO/releases/tag/$TAG"

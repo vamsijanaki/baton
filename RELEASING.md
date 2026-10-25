@@ -65,10 +65,16 @@ npm run release:publish         # GitHub Release for vX.Y.Z with the CHANGELOG n
    DMG is signed. `scripts/release-artifacts.mjs --require-notarized` then notarizes and staples the DMG, verifies
    (`codesign --verify --deep --strict`, `spctl -t exec` must say `source=Notarized Developer ID`,
    `stapler validate` on app and DMG, `spctl -t open` on the DMG), and writes `Baton-X.Y.Z-arm64.dmg` and
-   `SHA256SUMS.txt` into `release/`. Any failure stops the release.
+   `SHA256SUMS.txt` into `release/`. It also checks the in-app updater's feed: `latest-mac.yml` (written by
+   electron-builder from `build.publish`) must name this version and match the zip's sha512 and size (the stapled
+   DMG's entry is refreshed), the zip's `.blockmap` must exist, and the app inside the zip must carry Baton's
+   designated requirement (`com.vamsijanaki.baton`, team `D9S4VXPF9P`) — Squirrel.Mac in installed copies refuses
+   anything else. Any failure stops the release.
 4. **`npm run release:publish`** (`scripts/release-publish.mjs`) refuses unless HEAD is the pushed tag and
    `release/` holds this version's files, then creates the GitHub Release (or replaces the notes and assets of an
-   existing one) with `Baton-arm64.dmg`, `Baton-X.Y.Z-arm64.dmg`, `Baton-X.Y.Z-arm64-mac.zip`, `SHA256SUMS.txt`.
+   existing one) with `Baton-arm64.dmg`, `Baton-X.Y.Z-arm64.dmg`, `Baton-X.Y.Z-arm64-mac.zip`, `SHA256SUMS.txt`,
+   and the in-app updater's feed: `Baton-X.Y.Z-arm64-mac.zip.blockmap` and `latest-mac.yml` (uploaded last, after the
+   zip it describes). It re-checks that `latest-mac.yml` matches the zip first.
 5. **Verify the download**: <https://trybaton.app/download> (and
    <https://github.com/vamsijanaki/baton/releases/latest/download/Baton-arm64.dmg>) serves the new DMG; open it on a
    Mac — it must open with no Gatekeeper warning — check the version in About, and `shasum -a 256 -c SHA256SUMS.txt`.
@@ -91,6 +97,14 @@ npm run release:publish         # GitHub Release for vX.Y.Z with the CHANGELOG n
 Use it only when the Mac path is unavailable. Optional secrets, documented in the workflow: `CSC_LINK`,
 `CSC_KEY_PASSWORD` (Developer ID .p12), `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` (notarization).
 The CI signing path has never run — check its first output by hand.
+
+### In-app updates
+
+Baton 1.1.0+ checks GitHub Releases (`releases/latest` → `latest-mac.yml` → the zip). So: a release marked
+**Latest** without `latest-mac.yml` makes update checks fail (harmless, shown in Settings); never upload an ad-hoc
+build's `latest-mac.yml` (the fallback workflow skips it and removes a stale one); and changing the bundle id or the
+signing team would strand every installed copy (Squirrel.Mac would refuse the update). Yanking a release by marking
+it pre-release also takes it out of the update feed.
 
 ## Hotfixes and rollback
 

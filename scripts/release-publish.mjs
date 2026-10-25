@@ -3,7 +3,8 @@
 //
 //   npm run release:publish            (after `npm run release`, pushing the tag, and `npm run release:build`)
 //
-// Refuses unless HEAD is the pushed tag vX.Y.Z for package.json's version and release/ holds that version's files.
+// Refuses unless HEAD is the pushed tag vX.Y.Z for package.json's version and release/ holds that version's files,
+// including the in-app updater's feed (latest-mac.yml, verified against the zip, and the zip's .blockmap).
 // Creates the GitHub Release (notes = CHANGELOG section) or, if it exists (e.g. the fallback workflow made an
 // unsigned one), replaces its notes and assets with these. Uses the `gh` CLI's own login.
 import { execFileSync } from 'node:child_process';
@@ -12,6 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { changelogSection } from './changelog-notes.mjs';
+import { FEED_FILE, verifyFeed, zipName } from './update-feed.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = 'vamsijanaki/baton';
@@ -34,10 +36,14 @@ if (sh('git', ['rev-parse', 'HEAD']).trim() !== tagCommit) die(`HEAD is not ${ta
 if (!sh('git', ['ls-remote', '--tags', 'origin', `refs/tags/${tag}`]).trim()) die(`tag ${tag} is not on origin — push it first: git push origin ${tag}`);
 
 const rel = path.join(root, 'release');
-const files = ['Baton-arm64.dmg', `Baton-${version}-arm64.dmg`, `Baton-${version}-arm64-mac.zip`, 'SHA256SUMS.txt'].map((f) => path.join(rel, f));
+// latest-mac.yml + the zip's .blockmap are the in-app updater's feed (Settings › Updates in Baton 1.1.0+).
+// latest-mac.yml goes LAST (its own upload), so an updater never sees it before the zip it points at is there.
+const files = ['Baton-arm64.dmg', `Baton-${version}-arm64.dmg`, zipName(version), 'SHA256SUMS.txt', `${zipName(version)}.blockmap`, FEED_FILE].map((f) => path.join(rel, f));
 for (const f of files) if (!fs.existsSync(f)) die(`missing release/${path.basename(f)} — run \`npm run release:build\`.`);
 const sums = fs.readFileSync(files[3], 'utf8');
 if (!sums.includes(`Baton-${version}-arm64.dmg`)) die('SHA256SUMS.txt is not for this version — rebuild.');
+const feedProblems = verifyFeed(rel, version);
+if (feedProblems.length) die(`${FEED_FILE} does not match the release files — rebuild:\n  ${feedProblems.join('\n  ')}`);
 
 const body = changelogSection(version);
 if (!body) die(`CHANGELOG.md has no "## [${version}]" section.`);
@@ -57,9 +63,11 @@ const io = { stdio: 'inherit' };
 if (exists) {
   console.log(`Release ${tag} exists — replacing notes and assets.`);
   sh('gh', ['release', 'edit', tag, '--repo', REPO, '--title', `Baton ${version}`, '--notes-file', notesFile], io);
-  sh('gh', ['release', 'upload', tag, ...files, '--repo', REPO, '--clobber'], io);
+  sh('gh', ['release', 'upload', tag, ...files.slice(0, -1), '--repo', REPO, '--clobber'], io);
 } else {
-  sh('gh', ['release', 'create', tag, ...files, '--repo', REPO, '--title', `Baton ${version}`, '--notes-file', notesFile, '--verify-tag', '--latest'], io);
+  sh('gh', ['release', 'create', tag, ...files.slice(0, -1), '--repo', REPO, '--title', `Baton ${version}`, '--notes-file', notesFile, '--verify-tag', '--latest'], io);
 }
+// the updater feed only once the zip and blockmap it describes are up (gh uploads several files at once)
+sh('gh', ['release', 'upload', tag, files[files.length - 1], '--repo', REPO, '--clobber'], io);
 console.log(`\nPublished https://github.com/${REPO}/releases/tag/${tag}`);
 console.log('Next: check https://trybaton.app/download serves the new DMG; redeploy the site if it changed (npx wrangler deploy); post in Discussions.');

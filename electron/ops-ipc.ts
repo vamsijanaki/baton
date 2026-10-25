@@ -42,11 +42,23 @@ interface Pending {
 }
 const pending = new Map<string, Pending>();
 let busyLock: Promise<unknown> = Promise.resolve(); // one write operation at a time (sync passes included)
+let inFlight = 0; // queued or running write operations (the in-app updater never restarts while this is > 0)
+let frozen = false; // set right before a restart to install an update: no new operation may start
+const FROZEN = 'Baton is restarting to install an update — try again after it reopens.';
 const serial = <T>(f: () => Promise<T>): Promise<T> => {
-  const p = busyLock.then(f, f);
+  if (frozen) return Promise.reject(new Error(FROZEN));
+  inFlight++;
+  const g = () => (frozen ? Promise.reject(new Error(FROZEN)) : f());
+  const p = busyLock.then(g, g).finally(() => inFlight--);
   busyLock = p.catch(() => undefined);
   return p;
 };
+/** For the updater: operations queued or running right now. */
+export const opsInFlight = () => inFlight;
+/** For the updater: refuse new operations (true) right before quitting to install; false if the install was refused. */
+export function freezeOps(v: boolean) {
+  frozen = v;
+}
 const clean = (e: any) => String(e?.message ?? e).replace(/^Error invoking remote method '\w+': (Error: )?/, '');
 
 export function registerOps(ctx: OpsContext) {
@@ -239,6 +251,16 @@ export function registerOps(ctx: OpsContext) {
 
   /** "Quit <app> and continue": graceful quit (osascript, like ⌘Q), wait up to 20 s, apply, then reopen the apps. */
   ipcMain.handle('opQuitApply', async (_e, token: string) => {
+    // quit apps → apply → reopen is one operation for the updater's "is Baton idle?" check
+    if (frozen) throw new Error(FROZEN);
+    inFlight++;
+    try {
+      return await quitApply(token);
+    } finally {
+      inFlight--;
+    }
+  });
+  async function quitApply(token: string) {
     const p = pending.get(token);
     if (!p) throw new Error('This preview expired — review it again.');
     const apps_ = await quittable(p.op);
@@ -270,7 +292,7 @@ export function registerOps(ctx: OpsContext) {
     } finally {
       await reopen();
     }
-  });
+  }
 
   ipcMain.handle('opCancel', (_e, token: string) => {
     pending.get(token)?.cleanup?.();
@@ -513,7 +535,7 @@ export function registerOps(ctx: OpsContext) {
     }
   }
   async function syncPass() {
-    if (!safety.readSettings().syncEnabled) return;
+    if (frozen || !safety.readSettings().syncEnabled) return;
     await serial(async () => {
       const syncCtx = await model().then((m) => m.sync, () => lastCtx);
       const p = sharing.planSync(sharing.readSharing(), sharing.readSyncState(), await runningProfiles(), undefined, syncCtx);

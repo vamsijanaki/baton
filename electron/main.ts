@@ -32,10 +32,12 @@ import {
   scrubOwnEnv,
 } from './core';
 import { CLONES, claudeVersion, HUES, setHelperPath, listDesktopProfiles, openProfile, quitDesktops, runningDesktops, type DesktopProfile } from './desktop';
-import { registerOps } from './ops-ipc';
+import { freezeOps, opsInFlight, registerOps } from './ops-ipc';
+import { registerUpdater, updateBadge } from './updater';
+import { installBlocker } from './update-logic';
 import { syncContext, type TerminalIdentity } from './apps';
 import { desktopAttribution, readSharing, terminalState } from './sharing';
-import { readSettings } from './safety';
+import { listJournal, readSettings } from './safety';
 import { resolveUserData } from './roots';
 import { cachedAuth, checkAuth, hookStatus, probeUsage, probing, readUsage, type ProbeResult } from './usage';
 import { applyAttest, applySuspension, detectKind, fairUseProblem, launchGate, LINKS, needsLimitsAck, reconcileKind, recordProjectUse, type AttestInput, type UsageTrigger } from './fairuse';
@@ -189,6 +191,8 @@ function snapshot() {
     sharedProjects: readSharing().projects.map((p) => p.path),
     onboarded: readSettings().onboarded,
     home: process.env.HOME || '',
+    // in-app updates: just "is there a new version" for the sidebar footer and the tray (details: Settings › Updates)
+    update: updateBadge(),
   };
 }
 
@@ -878,6 +882,24 @@ app.whenReady().then(async () => {
   }, 60_000);
   // usage: checked once on open (gated: at most once per 15 min per account); afterwards only on Refresh
   void checkUsageOnOpen();
+  // in-app updates: the only network request Baton makes itself (GitHub Releases), on launch + daily when the
+  // setting is on; never in unsigned/dev builds, dry-run mode or a fake HOME. See updater.ts / ARCHITECTURE.md.
+  registerUpdater({
+    envDryRun: ENV_DRY_RUN,
+    win: () => win,
+    broadcast,
+    log: logLaunch,
+    blocker: () => installBlocker({ opsInFlight: opsInFlight(), journalApplying: listJournal().filter((j) => j.status === 'applying').length }),
+    prepareInstall: () => {
+      freezeOps(true); // no operation may start between this point and the quit
+      saveState(state); // flush
+      quitting = true; // let the windows close (they normally hide)
+    },
+    installAborted: () => {
+      freezeOps(false);
+      quitting = false;
+    },
+  });
 });
 
 app.on('activate', () => showWindow());

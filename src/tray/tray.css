@@ -290,6 +290,8 @@
 .t-foot-btn { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 7px; font-size: 11.5px; color: var(--t-muted); transition: background 120ms, color 120ms; }
 .t-foot-btn:hover { background: var(--t-card-hover); color: var(--t-fg); }
 .t-foot-icon { width: 26px; height: 26px; }
+.t-update { color: var(--t-teal); }
+.t-update-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--t-teal); }
 
 .tray-body :focus-visible { outline: 2px solid color-mix(in srgb, var(--t-teal) 70%, transparent); outline-offset: 1px; border-radius: 8px; }
 .tray-body .t-card:focus-visible { outline: none; }

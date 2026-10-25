@@ -302,6 +302,16 @@ export default function App() {
 
         <div className="no-drag space-y-2.5 border-t border-line p-3">
           <RunningSummary procs={snap.running} accName={accName} project={project} />
+          {snap.update && (
+            <button
+              onClick={() => setView('settings')}
+              title={`Baton ${snap.update.version} is available — Settings › Updates`}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-[11.5px] text-accent transition-colors hover:bg-hover"
+            >
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden />
+              {snap.update.ready ? `Restart to update to ${snap.update.version}` : `Update available: ${snap.update.version}`}
+            </button>
+          )}
           <div className="flex items-center justify-between">
             <Toggle
               checked={snap.dryRun}

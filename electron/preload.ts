@@ -45,7 +45,12 @@ contextBridge.exposeInMainWorld('cs', {
   exportDiagnostics: invoke('exportDiagnostics'),
   openLog: invoke('openLog'),
   clearLock: invoke('clearLock'),
-  on: (ch: 'changed' | 'route' | 'conflict' | 'launchBlocked', fn: (payload: any) => void) => {
+  updateStatus: invoke('updateStatus'),
+  updateCheck: invoke('updateCheck'),
+  updateDownload: invoke('updateDownload'),
+  updateRestart: invoke('updateRestart'),
+  updateSetAuto: invoke('updateSetAuto'),
+  on: (ch: 'changed' | 'route' | 'conflict' | 'launchBlocked' | 'update', fn: (payload: any) => void) => {
     const h = (_: unknown, p: any) => fn(p);
     ipcRenderer.on(ch, h);
     return () => ipcRenderer.removeListener(ch, h);

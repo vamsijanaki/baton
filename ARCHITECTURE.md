@@ -201,10 +201,42 @@ any child `claude` would sign in as that session's account regardless of `CLAUDE
 cleaned environment, and the Terminal launch script unsets those variables again before `exec claude`
 (`writeLaunchScript`).
 
-### No server, no telemetry, no update check
+### No server, no telemetry; one optional update check
 
-The Baton process makes no network requests of its own. There is no analytics, crash reporter or auto-updater; see
+The Baton process makes exactly one kind of network request of its own: the in-app update check against GitHub
+Releases (below). There is no analytics, crash reporter or Baton server; see
 [section 5](#5-threat-model-and-privacy) for the full list of what does touch the network.
+
+### In-app updates: electron-updater + Squirrel.Mac, from GitHub Releases only
+
+**Chosen:** [electron-updater](https://www.electron.build/auto-update) with the GitHub provider
+(`vamsijanaki/baton`), which on macOS hands the downloaded `.zip` to Squirrel.Mac. Decisions live in
+[`electron/update-logic.ts`](electron/update-logic.ts) (no Electron, no network; tested with a fake clock), the wiring
+in [`electron/updater.ts`](electron/updater.ts), the UI in Settings › Updates.
+
+- **When.** "Check for updates automatically" (`autoUpdateCheck` in `settings.json`, default on): one check when
+  Baton starts, then at most once a day (`shouldCheck`; an hourly timer only looks at the clock). Off: nothing is
+  contacted unless you press Check now. The last check time is kept in `~/.baton/update.json`.
+- **Never** in a dev or unsigned/ad-hoc build ("Updates are only available in signed releases"), in dry-run mode
+  (`BATON_DRY_RUN`), against a fake HOME (tests, `npm run shots`), or when running from the disk image or a
+  translocated copy (`updateSupport`). The running app's signature is read locally with `codesign -dv`; it must be
+  Developer ID, team `D9S4VXPF9P`, bundle id `com.vamsijanaki.baton`. electron-updater is not even loaded otherwise.
+- **No silent installs.** `autoDownload` and `autoInstallOnAppQuit` are off. The user presses "Download and install"
+  (progress shown), then "Restart to update". No popups or notifications; a small "Update available" line in the
+  sidebar footer and the tray popover footer is the only hint.
+- **Integrity.** electron-updater verifies the zip's sha512 against `latest-mac.yml`; Squirrel.Mac refuses an app
+  whose code signature does not satisfy the running app's designated requirement (same bundle id, same Developer ID
+  team). The release scripts check both before publishing (`scripts/update-feed.mjs`, `release-artifacts.mjs`).
+- **Never during an operation.** "Restart to update" waits while any write operation is queued or running
+  (`opsInFlight` in `ops-ipc.ts`, including quit-and-apply) or any journal entry is `applying`, re-checking every
+  2 s (`installBlocker`). When idle, in the same tick: new operations and sync passes are refused (`freezeOps`),
+  `state.json` is flushed, windows are allowed to close, and only then `quitAndInstall`. If Squirrel refuses the
+  update, operations are unfrozen and Baton keeps running with the error shown.
+- **Release notes** come from the GitHub release body (the CHANGELOG section), converted to plain text in the main
+  process; the renderer never renders HTML from the network.
+
+**Rejected:** a custom updater (would re-implement signature checks); auto-download/auto-install on quit (installs
+outside the "never during an operation" gate); checking on window focus or more often than daily.
 
 ### Usage via the official CLI, on demand, gated to once per 15 minutes
 
@@ -361,7 +393,8 @@ Terminal (`build/entitlements.mac.plist`). It can therefore read anything you ca
 
 What it writes: its own state folder, and through the safety engine, the areas the guard list allows. Outside the
 engine, Baton writes only its own files (`state.json`, launch scripts in `~/.baton/launch/`, `launch.log`, usage
-caches). Turning passive usage capture on or off for an account changes that account's `settings.json` `statusLine`
+caches, `update.json` with the last update-check time; a downloaded update sits in
+`~/Library/Caches/baton-updater/` until it is installed). Turning passive usage capture on or off for an account changes that account's `settings.json` `statusLine`
 key, and that goes through the safety engine like every other change (see
 [section 8](#8-known-limitations)).
 
@@ -370,7 +403,8 @@ key, and that goes through the safety engine like every other change (see
 - Reading Keychain items or credential values.
 - Copying sign-ins between accounts or apps.
 - Modifying Claude.app or Claude Code.
-- Sending anything anywhere.
+- Sending anything anywhere. The update check is a plain request for public release files: no account, project,
+  email or machine identifier is in it.
 
 ### Renderer isolation
 
@@ -397,7 +431,7 @@ The main window's `setWindowOpenHandler` denies new windows and hands links to t
 
 | Who | What | When |
 |---|---|---|
-| Baton's own process | **None.** No `fetch`, `http`, sockets, analytics, crash reporting or update check. | Never |
+| Baton's own process | **Update check only** (`updater.ts`, electron-updater): `github.com/vamsijanaki/baton/releases/latest` (latest tag), `…/releases.atom` (release notes), `…/releases/download/vX.Y.Z/latest-mac.yml`; after you press Download, the `.zip` and `.zip.blockmap`, served by GitHub's download host (`objects.githubusercontent.com` / `release-assets.githubusercontent.com`). `api.github.com` is not used. A normal HTTPS request: no cookies, tokens, telemetry or identifiers beyond what any HTTPS client sends (IP address, a user agent). Squirrel.Mac then reads the downloaded zip from a one-time server on `127.0.0.1` (local only). No analytics, crash reporting or other requests. | On launch and at most once a day when "Check for updates automatically" is on (default); otherwise only when you press Check now. Never in unsigned/dev builds, dry-run mode or a fake HOME |
 | Renderer / popover | **None.** CSP `default-src 'self'`. | Never |
 | The official `claude` CLI, spawned by Baton | `claude -p /usage` (reads plan limits from Anthropic; no model call) and `claude auth status`. | On app open (gated, once per 15 min per account) and on Refresh |
 | The official `claude` CLI, in Terminal | `claude auth login`, and the sessions you start. Baton writes a launch script and asks Terminal to run it; the CLI then talks to Anthropic as it always does. | When you click Sign in / Continue / Open |
@@ -458,10 +492,10 @@ touched; the runner prints that as its last line.
 
 ### What the tests cover
 
-On 25 Oct 2026: **39 tests, 368 checks, about 2 s.**
+On 25 Oct 2026: **55 tests, 577 checks, about 3 s.**
 
 ```
-39/39 tests passed, 368 checks, 2.2s — sandbox only (real HOME … never touched)
+55/55 tests passed, 577 checks, 2.9s — sandbox only (real HOME … never touched)
 ```
 
 | Group | Examples |
@@ -476,6 +510,7 @@ On 25 Oct 2026: **39 tests, 368 checks, about 2 s.**
 | Fair use | eight tests (kind detection from non-secret fields, attestation, second Personal plan, no limit-dodging UI paths, Work notices, conservative suspension detection, usage gate, single-person scope) |
 | Compatibility | new installs use the new names; installs under the old name keep their folders, nothing moved |
 | Tray | popover placement across displays and edges; `&` escaping in native menus; the popover uses the same gates as the main window and runs sandboxed |
+| Updates | the auto-check setting defaults on and persists; checks on launch + once a day, none when off, Check now always, nothing in unsigned/dry-run/fake-HOME builds (fake clock); "Restart to update" waits while an operation or an `applying` journal entry exists, then freezes ops and flushes state before installing; release notes are plain text; `latest-mac.yml` must match the zip (sha512 + size), the stapled DMG's entry is refreshed, the blockmap is required |
 
 ### Read-only checks against a real Mac
 
@@ -491,8 +526,9 @@ cancels every preview instead of applying it. The images in `docs/screenshots/` 
 
 ### What is not covered by automated tests
 
-The Swift helper, the IPC wiring in `main.ts` and `ops-ipc.ts` (beyond the tray checks), the React UI, and real
-interaction with Claude.app and the `claude` CLI. Those are verified by hand against real installs, which is why
+The Swift helper, the IPC wiring in `main.ts` and `ops-ipc.ts` (beyond the tray checks), the React UI, real
+interaction with Claude.app and the `claude` CLI, and a real update end to end (GitHub feed → download → Squirrel.Mac
+signature check → relaunch), which needs two signed, published releases. Those are verified by hand against real installs, which is why
 facts about Claude's on-disk layout carry the version they were checked on.
 
 ## 8. Known limitations
@@ -536,4 +572,6 @@ Summarised from [RELEASING.md](RELEASING.md):
 - Builds are made on the maintainer's Mac, signed with a Developer ID (hardened runtime, the app, its Electron
   helpers and the Swift helper all signed), notarized by Apple and stapled. The release scripts verify with
   `codesign --verify --deep --strict`, `spctl` (must report `source=Notarized Developer ID`) and `stapler validate`,
-  and publish a DMG, a zip and `SHA256SUMS.txt` to GitHub Releases.
+  and publish a DMG, a zip and `SHA256SUMS.txt` to GitHub Releases, plus the in-app updater's feed:
+  `latest-mac.yml` (checked against the zip, uploaded last) and the zip's `.blockmap`. The app inside the zip must
+  carry Baton's designated requirement (bundle id + team), or Squirrel.Mac in installed copies would refuse it.

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>How Baton Works</title>
-<meta name="description" content="How Baton is built: per-project links into one transcript store, a safety engine that snapshots, journals and rolls back every change, no network calls of its own, and a test suite that runs in a fake home folder.">
+<meta name="description" content="How Baton is built: per-project links into one transcript store, a safety engine that snapshots, journals and rolls back every change, one optional update check as its only network call of its own, and a test suite that runs in a fake home folder.">
 <link rel="canonical" href="https://trybaton.app/how-it-works/">
 <meta name="theme-color" content="#0b0f0e" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#fbfcfc" media="(prefers-color-scheme: light)">
@@ -329,7 +329,7 @@ td.none { color: var(--accent); font-weight: 600; }
       <p class="lead">Baton touches the folders that hold your Claude Code history, so it is built like a tool that has to be trusted with them. This page explains the design, the safety engine, what Baton will never do, and how it is tested, with links to the code for every claim.</p>
       <ul class="facts" aria-label="At a glance">
         <li><b>39</b><span>sandbox tests, 368 checks, 2.2 s</span></li>
-        <li><b>0</b><span>network requests made by Baton itself</span></li>
+        <li><b>1</b><span>network request Baton makes itself: the optional update check</span></li>
         <li><b>0</b><span>tokens or Keychain items read</span></li>
         <li><b>10</b><span>primitive file steps, each with an inverse</span></li>
       </ul>
@@ -643,8 +643,8 @@ td.none { color: var(--accent); font-weight: 600; }
             <div class="dec">
               <h3>No server at all</h3>
               <div class="dec-cols">
-                <div><span class="tag yes"><svg aria-hidden="true"><use href="#i-check"/></svg>Chose</span><p>Everything happens on your Mac, in files you can inspect. Updates are a new download from GitHub Releases.</p></div>
-                <div><span class="tag nope"><svg aria-hidden="true"><use href="#i-x"/></svg>Said no to</span><p>Accounts, telemetry, crash reporting, and an auto-updater that phones home.</p></div>
+                <div><span class="tag yes"><svg aria-hidden="true"><use href="#i-check"/></svg>Chose</span><p>Everything happens on your Mac, in files you can inspect. Updates come from GitHub Releases: an optional daily check you can turn off, signature-verified, installed only when you restart.</p></div>
+                <div><span class="tag nope"><svg aria-hidden="true"><use href="#i-x"/></svg>Said no to</span><p>Accounts, telemetry, crash reporting, and an updater that installs silently or sends anything about you.</p></div>
               </div>
             </div>
           </div>
@@ -659,7 +659,7 @@ td.none { color: var(--accent); font-weight: 600; }
             <li><svg aria-hidden="true"><use href="#i-x"/></svg><b>Read your tokens or the Keychain</b><span>Only allow-listed fields are taken from config files.</span></li>
             <li><svg aria-hidden="true"><use href="#i-x"/></svg><b>Copy a sign-in between accounts</b><span>Every account and app signs in through Claude's own flow.</span></li>
             <li><svg aria-hidden="true"><use href="#i-x"/></svg><b>Modify Claude.app or Claude Code</b><span>App copies are byte-identical clones; the CLI is run as installed.</span></li>
-            <li><svg aria-hidden="true"><use href="#i-x"/></svg><b>Send anything over the network</b><span>Baton's process has no network code; its windows are locked to local content.</span></li>
+            <li><svg aria-hidden="true"><use href="#i-x"/></svg><b>Send your data anywhere</b><span>The only request Baton makes itself is the optional update check to GitHub Releases, with nothing about you in it; its windows are locked to local content.</span></li>
             <li><svg aria-hidden="true"><use href="#i-x"/></svg><b>Change anything without showing you first</b><span>Every operation has a dry-run preview. The one exception is background sync for projects you chose to share, which still snapshots and journals every pass.</span></li>
             <li><svg aria-hidden="true"><use href="#i-x"/></svg><b>Help you dodge usage limits or a ban</b><span>No limit alerts or account rotation; a suspended account's projects aren't offered to other accounts.</span></li>
           </ul>
@@ -677,7 +677,7 @@ td.none { color: var(--accent); font-weight: 600; }
             <table>
               <thead><tr><th>Who</th><th>What</th><th>When</th></tr></thead>
               <tbody>
-                <tr><td>Baton's own process</td><td class="none">None. No fetch, sockets, analytics, crash reports or update checks.</td><td>Never</td></tr>
+                <tr><td>Baton's own process</td><td>The update check only: <code>github.com/vamsijanaki/baton/releases</code> (latest version, its notes, <code>latest-mac.yml</code>) and, when you press Download, the zip from GitHub's download host. A plain HTTPS request with no identifiers. No analytics, crash reports or anything else.</td><td>On launch and once a day while "Check for updates automatically" is on (the default); otherwise only when you press Check now. Never in unsigned builds</td></tr>
                 <tr><td>Baton's windows</td><td class="none">None. Blocked by the CSP.</td><td>Never</td></tr>
                 <tr><td>Official <code>claude</code> CLI, run by Baton</td><td><code>claude -p /usage</code> (plan limits, no model call) and <code>claude auth status</code>, with a cleaned environment.</td><td>When Baton opens (gated) and when you press Refresh</td></tr>
                 <tr><td>Official <code>claude</code> CLI, in Terminal</td><td><code>claude auth login</code> and the sessions you start. Baton writes a launch script; Terminal runs it.</td><td>When you click Sign in or Continue</td></tr>

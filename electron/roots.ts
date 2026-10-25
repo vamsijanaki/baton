@@ -60,6 +60,8 @@ export const journalDir = () => path.join(R.appDir, 'journal');
 export const sharingFile = () => path.join(R.appDir, 'sharing.json');
 export const syncStateFile = () => path.join(R.appDir, 'sync-state.json');
 export const settingsFile = () => path.join(R.appDir, 'settings.json');
+/** In-app updates: when the last check ran and what it found (no identifiers, nothing sent anywhere). */
+export const updateStateFile = () => path.join(R.appDir, 'update.json');
 export const legacyLinksFile = () => path.join(R.appDir, 'desktop-links.json');
 export const legacyStore = () => path.join(R.appDir, 'desktop-sessions');
 export const desktopRegistry = () => path.join(R.appDir, 'desktop-profiles.json');

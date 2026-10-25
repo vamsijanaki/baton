@@ -406,6 +406,11 @@ export default function TrayApp() {
             <Plus size={14} /> Add account
           </button>
           <span className="t-grow" />
+          {snap?.update && (
+            <button className="t-foot-btn t-update" data-nav="foot" title={`Baton ${snap.update.version} — open Settings › Updates`} onClick={() => open('settings')}>
+              <span className="t-update-dot" aria-hidden /> {snap.update.ready ? 'Restart to update' : 'Update available'}
+            </button>
+          )}
           <button className="t-icon-btn t-foot-icon" data-nav="foot" title="Settings" aria-label="Settings" onClick={() => open('settings')}>
             <Settings size={14} />
           </button>

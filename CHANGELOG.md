@@ -8,6 +8,15 @@ Every pull request with a user-visible change adds a line under **Unreleased** (
 
 ## [Unreleased]
 
+### Added
+
+- In-app updates: Settings › Updates shows your version, checks GitHub Releases for a new one (on launch and once a
+  day, or only when you press Check now if you turn automatic checks off), shows its release notes, downloads it with
+  progress and installs it on "Restart to update", which waits until no Baton operation is running. A small "Update
+  available" line appears in the sidebar and the menu-bar panel; no popups. This check is the only network request
+  Baton makes itself, and it sends nothing about you. Updates work in signed releases only; from 1.0.x, download this
+  version once by hand.
+
 ## [1.0.2] - 2026-10-25
 
 ### Fixed
