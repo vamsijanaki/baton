@@ -11,8 +11,10 @@
     "typecheck": "tsc -p tsconfig.json",
     "start": "npm run build && electron .",
     "check:core": "esbuild scripts/check-core.ts --bundle --platform=node --format=cjs --outfile=out/check-core.cjs --log-level=warning && node out/check-core.cjs",
-    "dist": "npm test && npm run build && electron-builder --mac --arm64 --publish never",
+    "dist": "npm test && npm run build && node scripts/dist.mjs",
     "release": "node scripts/release.mjs",
+    "release:build": "npm test && npm run build && APPLE_KEYCHAIN_PROFILE=${APPLE_KEYCHAIN_PROFILE:-baton-notary} node scripts/dist.mjs --require-signed && APPLE_KEYCHAIN_PROFILE=${APPLE_KEYCHAIN_PROFILE:-baton-notary} node scripts/release-artifacts.mjs --require-notarized",
+    "release:publish": "node scripts/release-publish.mjs",
     "build:helper": "./scripts/build-helper.sh",
     "test": "esbuild scripts/test.ts --bundle --platform=node --format=cjs --outfile=out/test.cjs --log-level=warning && node out/test.cjs",
     "check:real": "esbuild scripts/check-real.ts --bundle --platform=node --format=cjs --outfile=out/check-real.cjs --log-level=warning && node out/check-real.cjs",
@@ -72,7 +74,7 @@
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",
-      "identity": "-",
+      "identity": "Vamsi Krishna Janaki (D9S4VXPF9P)",
       "darkModeSupport": true,
       "target": [
         "dmg",
@@ -81,13 +83,20 @@
       "extendInfo": {
         "NSAppleEventsUsageDescription": "Baton opens Terminal windows to run claude for the account you choose."
       },
-      "hardenedRuntime": false,
-      "artifactName": "Baton-${version}-${arch}-mac.${ext}"
+      "hardenedRuntime": true,
+      "artifactName": "Baton-${version}-${arch}-mac.${ext}",
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "binaries": [
+        "Contents/Resources/baton-desktop-helper"
+      ]
     },
     "asar": true,
     "dmg": {
       "title": "Baton ${version}",
-      "artifactName": "Baton-${arch}.dmg"
+      "artifactName": "Baton-${arch}.dmg",
+      "sign": true
     },
     "publish": null
   },

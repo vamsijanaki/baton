@@ -117,11 +117,9 @@ And also:
 ### Download
 
 1. Download [`Baton-arm64.dmg`](https://github.com/vamsijanaki/baton/releases/latest/download/Baton-arm64.dmg) from the [latest release](https://github.com/vamsijanaki/baton/releases/latest) (checksums in `SHA256SUMS.txt`).
-2. Open it and drag **Baton** to Applications.
-3. First launch: **right-click Baton.app → Open → Open**.
+2. Open it and drag **Baton** to Applications, then open Baton like any other app.
 
-> [!IMPORTANT]
-> The build is ad-hoc signed but **not notarized** (that needs a paid Apple Developer ID — see [Sponsor](#sponsor)), so Gatekeeper blocks the first launch. If right-click → Open isn't offered on your macOS version, try to open Baton once, then go to **System Settings › Privacy & Security** and click **Open Anyway**. You only do this once.
+Releases are signed with a Developer ID and notarized by Apple, so macOS opens them normally.
 
 The first Terminal launch asks for permission to control Terminal (Automation) — that's how Baton opens a Terminal window as the account you chose.
 
@@ -135,7 +133,7 @@ cd baton
 npm ci
 npm test              # sandboxed tests against a fake HOME — your real files are never touched
 npm run dist          # → release/Baton-arm64.dmg, release/Baton-<version>-arm64-mac.zip and release/mac-arm64/Baton.app
-npm run install:local # optional: ad-hoc sign and copy Baton.app to ~/Applications
+npm run install:local # optional: copy Baton.app to ~/Applications (ad-hoc signed if you have no Developer ID)
 ```
 
 <details>
@@ -258,7 +256,7 @@ The release is an Apple silicon build. An Intel build may work from source (`ele
 Baton is free and MIT-licensed, and will stay that way. If it saves you time, [sponsoring on GitHub](https://github.com/sponsors/vamsijanaki) helps:
 
 - **Keep Baton free** for everyone, with no paid tier and no telemetry.
-- **Pay for an Apple Developer ID** ($99/year) so releases can be notarized and open without the Gatekeeper workaround.
+- **Cover the Apple Developer ID** ($99/year) that keeps releases signed and notarized.
 - **Fund maintenance** — keeping up with Claude Code and desktop-app changes, macOS releases, and fixes.
 
 <a href="https://github.com/sponsors/vamsijanaki"><img alt="Sponsor on GitHub" src="https://img.shields.io/badge/Sponsor-%E2%9D%A4-db61a2?logo=githubsponsors&logoColor=white"></a>

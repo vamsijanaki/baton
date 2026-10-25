@@ -55,6 +55,8 @@ First public release. A Mac app (Apple silicon) for one person using more than o
 
 ### Security
 
+- Releases are signed with a Developer ID (hardened runtime) and notarized by Apple; the DMG is signed, notarized
+  and stapled, and every release ships `SHA256SUMS.txt`.
 - Never reads tokens or the Keychain, never modifies Claude Code or Claude.app, no servers, no telemetry. Inherited
   `CLAUDE_*` / `ANTHROPIC_*` variables are cleared at start-up so each `claude` runs as exactly the chosen account.
 

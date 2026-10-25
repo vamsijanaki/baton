@@ -13,5 +13,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) and [RELEASING.md](RELEASING.md); the ru
 - **Safety**: all writes go through the safety engine; never add an operation that deletes data; never read
   credentials; never run anything against the real HOME except the read-only `npm run check:real`.
 - **Releases**: don't create tags, releases or version bumps unless asked. When asked, use
-  `npm run release -- <patch|minor|major|x.y.z>`; never delete or move a pushed tag; never change repo visibility.
+  `npm run release -- <patch|minor|major|x.y.z>`, then `npm run release:build` (signed + notarized, this Mac only)
+  and `npm run release:publish`; never publish an ad-hoc build; never delete or move a pushed tag; never change repo
+  visibility; never print or read keychain secrets.
 - **Website** (`site/`) deploys manually with `npx wrangler deploy`; the release workflow does not touch it.

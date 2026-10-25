@@ -18,4 +18,4 @@ Include what you found, how to reproduce it, and the impact (for example: a path
 ## Out of scope
 
 - Issues in Claude Code, the Claude desktop app or Anthropic's services — report those to Anthropic.
-- The unsigned/un-notarized build itself (documented; build from source if you prefer).
+- Builds you make yourself from source without a Developer ID (they are ad-hoc signed and not notarized).

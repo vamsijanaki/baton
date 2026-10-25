@@ -39,34 +39,58 @@ Baton manages people's Claude folders. A release must not lose or leak data.
 
 ## Cutting a release
 
+Releases are built **on the maintainer's Mac**, signed with the Developer ID
+`Developer ID Application: Vamsi Krishna Janaki (D9S4VXPF9P)` and notarized by Apple. Prerequisites on that Mac:
+the identity in the login keychain and a notarytool keychain profile named `baton-notary`
+(`xcrun notarytool store-credentials baton-notary --apple-id … --team-id D9S4VXPF9P`), and `gh` logged in.
+
 ```bash
 git checkout main && git pull
-npm run release -- patch        # or minor | major | 1.2.3   (add --push to push in one go)
+npm run release -- patch        # or minor | major | 1.2.3
+git push origin main && git push origin vX.Y.Z
+npm run release:build           # signed + notarized + stapled build, verified
+npm run release:publish         # GitHub Release for vX.Y.Z with the CHANGELOG notes + assets
 ```
 
-`scripts/release.mjs` refuses if the tree is dirty, you're not on `main`, the tag exists, `Unreleased` is empty, or
-typecheck/tests fail. It then bumps `package.json` + `package-lock.json`, moves `Unreleased` into
-`## [X.Y.Z] - YYYY-MM-DD`, commits `Release vX.Y.Z` with your configured git author, creates the annotated tag
-`vX.Y.Z`, and prints the push command. To back out before pushing: `git tag -d vX.Y.Z && git reset --hard HEAD~1`.
-
-Then:
-
-1. **Push**: `git push origin main && git push origin vX.Y.Z`.
-2. **Workflow**: [`.github/workflows/release.yml`](.github/workflows/release.yml) runs on the tag (macOS arm64):
-   typecheck, tests, `npm run dist` (never publishes by itself), then creates the GitHub Release with the
-   CHANGELOG section as notes and uploads `Baton-arm64.dmg`, `Baton-X.Y.Z-arm64.dmg`, `Baton-X.Y.Z-arm64-mac.zip`
-   and `SHA256SUMS.txt`. To rebuild an existing tag: Actions → Release → Run workflow → tag `vX.Y.Z`
-   (assets are replaced).
-3. **Verify the download**: <https://trybaton.app/download> (and
+1. **`npm run release`** (`scripts/release.mjs`) refuses if the tree is dirty, you're not on `main`, the tag exists,
+   `Unreleased` is empty, or typecheck/tests fail. It bumps `package.json` + `package-lock.json`, moves `Unreleased`
+   into `## [X.Y.Z] - YYYY-MM-DD`, commits `Release vX.Y.Z` with your configured git author, creates the annotated
+   tag, and prints the push command (`--push` pushes too). To back out before pushing:
+   `git tag -d vX.Y.Z && git reset --hard HEAD~1`.
+2. **Push** main and the tag. The tag push runs the fallback workflow as a build check only; it does not publish
+   (see below).
+3. **`npm run release:build`**: tests, build, then `scripts/dist.mjs --require-signed` runs electron-builder with
+   `APPLE_KEYCHAIN_PROFILE=baton-notary` — the app, its Electron helpers and `Resources/baton-desktop-helper` are
+   signed (hardened runtime, timestamp, `build/entitlements.mac.plist`), the app is notarized and stapled, and the
+   DMG is signed. `scripts/release-artifacts.mjs --require-notarized` then notarizes and staples the DMG, verifies
+   (`codesign --verify --deep --strict`, `spctl -t exec` must say `source=Notarized Developer ID`,
+   `stapler validate` on app and DMG, `spctl -t open` on the DMG), and writes `Baton-X.Y.Z-arm64.dmg` and
+   `SHA256SUMS.txt` into `release/`. Any failure stops the release.
+4. **`npm run release:publish`** (`scripts/release-publish.mjs`) refuses unless HEAD is the pushed tag and
+   `release/` holds this version's files, then creates the GitHub Release (or replaces the notes and assets of an
+   existing one) with `Baton-arm64.dmg`, `Baton-X.Y.Z-arm64.dmg`, `Baton-X.Y.Z-arm64-mac.zip`, `SHA256SUMS.txt`.
+5. **Verify the download**: <https://trybaton.app/download> (and
    <https://github.com/vamsijanaki/baton/releases/latest/download/Baton-arm64.dmg>) serves the new DMG; open it on a
-   Mac, check the version in About, and `shasum -a 256 -c SHA256SUMS.txt`.
-4. **Website**: if `site/` changed, redeploy it by hand from the repo root: `npx wrangler deploy` (Cloudflare,
-   config in `wrangler.jsonc`). The release workflow never deploys the site.
-5. **Announce** in GitHub Discussions with the changelog section.
+   Mac — it must open with no Gatekeeper warning — check the version in About, and `shasum -a 256 -c SHA256SUMS.txt`.
+6. **Website**: if `site/` changed, redeploy it by hand from the repo root: `npx wrangler deploy` (Cloudflare,
+   config in `wrangler.jsonc`). Nothing deploys the site automatically.
+7. **Announce** in GitHub Discussions with the changelog section.
 
-Builds are ad-hoc signed and not notarized. The workflow has documented slots for `CSC_LINK`, `CSC_KEY_PASSWORD`,
-`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`; signing/notarization switches on only when those
-secrets exist. The first signed release must be checked by hand (`spctl -a -vv Baton.app`).
+`npm run dist` is the everyday build: signed (not notarized) when the Developer ID is on the Mac, otherwise ad-hoc.
+`BATON_UNSIGNED=1 npm run dist` forces the ad-hoc build. Ad-hoc builds are for local use only — never publish one.
+
+### Fallback: the GitHub workflow
+
+[`.github/workflows/release.yml`](.github/workflows/release.yml) builds a tag on macOS arm64 (typecheck, tests,
+`npm run dist`, checksums). Without signing secrets the build is **ad-hoc and not notarized**, so:
+
+- on a **tag push** it only builds as a check and publishes nothing (unless signing secrets are set);
+- **Actions → Release → Run workflow** with a tag publishes that build; if the release already exists (e.g. the
+  signed local one) it refuses unless `replace_existing` is ticked.
+
+Use it only when the Mac path is unavailable. Optional secrets, documented in the workflow: `CSC_LINK`,
+`CSC_KEY_PASSWORD` (Developer ID .p12), `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` (notarization).
+The CI signing path has never run — check its first output by hand.
 
 ## Hotfixes and rollback
 

@@ -1,25 +1,32 @@
-# Release: build the Mac app for a version tag and publish it as a GitHub Release.
+# Release (FALLBACK path): build the Mac app for a version tag and publish it as a GitHub Release.
 #
-# Trigger: pushing a tag vX.Y.Z (made by `npm run release`, see RELEASING.md), or run manually
-# (Actions → Release → Run workflow) with an EXISTING tag to rebuild/re-upload it.
+# The PRIMARY release path is local, on the maintainer's Mac, signed + notarized:
+#   npm run release:build && npm run release:publish        (see RELEASING.md)
+# This workflow exists for when that isn't possible. Without signing secrets it publishes an ad-hoc signed,
+# NOT notarized build (Gatekeeper will warn) — prefer the local path for anything users download.
+#
+# Triggers:
+#   * push of a tag vX.Y.Z (made by `npm run release`): builds and tests the tag as a check, but publishes ONLY when
+#     signing secrets are set — so it never races the local signed `npm run release:publish` with an unsigned build.
+#   * manual run (Actions → Release → Run workflow) with an EXISTING tag: builds and publishes. If that release already
+#     exists (e.g. published locally, signed) it refuses unless "replace_existing" is ticked.
 #
 # Assets uploaded to the release:
 #   Baton-arm64.dmg               stable name — https://github.com/vamsijanaki/baton/releases/latest/download/Baton-arm64.dmg
 #   Baton-X.Y.Z-arm64.dmg         versioned copy of the same DMG
 #   Baton-X.Y.Z-arm64-mac.zip     zipped .app (for a future auto-updater)
 #   SHA256SUMS.txt                `shasum -a 256 -c SHA256SUMS.txt` to verify
-# Release notes = the "## [X.Y.Z]" section of CHANGELOG.md.
+# Release notes = the "## [X.Y.Z]" section of CHANGELOG.md (scripts/changelog-notes.mjs).
 #
-# Signing / notarization (NOT active yet — builds are ad-hoc signed, as in package.json `mac.identity: "-"`).
-# When an Apple Developer ID is available, add these repository secrets and the "signed" path below switches on:
-#   CSC_LINK                      base64 of the Developer ID Application .p12 (or an https URL to it)
+# Optional signing / notarization secrets (none are set today). scripts/dist.mjs signs as the package.json
+# identity when CSC_LINK is present; scripts/release-artifacts.mjs notarizes + staples the DMG when the Apple
+# trio is present:
+#   CSC_LINK                      base64 of the "Developer ID Application" .p12 (same identity as build.mac.identity)
 #   CSC_KEY_PASSWORD              password of that .p12
 #   APPLE_ID                      Apple ID email used for notarization
 #   APPLE_APP_SPECIFIC_PASSWORD   app-specific password for that Apple ID (appleid.apple.com)
-#   APPLE_TEAM_ID                 10-character team id
-# With only CSC_LINK + CSC_KEY_PASSWORD the app is Developer-ID signed (hardened runtime) but not notarized;
-# with all five it is also notarized. Without them the build is ad-hoc exactly like `npm run dist` locally.
-# The signed path has never run — verify the first signed release by hand (spctl -a -vv Baton.app).
+#   APPLE_TEAM_ID                 10-character team id (D9S4VXPF9P)
+# The CI signing path has never run; check the first such release by hand (spctl -a -vvv -t exec Baton.app).
 #
 # The website (site/) is NOT deployed from here; deploy it manually with `npx wrangler deploy` (see RELEASING.md).
 
@@ -34,6 +41,11 @@ on:
         description: 'Existing tag to build and publish, e.g. v1.0.1'
         required: true
         type: string
+      replace_existing:
+        description: 'Replace the assets of an existing release (e.g. a signed local one) with this build'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -71,21 +83,12 @@ jobs:
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          awk -v v="$VERSION" '
-            index($0, "## [" v "]") == 1 { f = 1; next }
-            f && /^## \[/ { exit }
-            f && /^\[[^]]+\]: / { exit }
-            f { print }
-          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
-          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md"; then
-            echo "::error::CHANGELOG.md has no '## [$VERSION]' section (or it is empty)"; exit 1
-          fi
-          cat >> "$RUNNER_TEMP/notes.md" <<EOF
+          node scripts/changelog-notes.mjs "$VERSION" > "$RUNNER_TEMP/notes.md"
+          cat >> "$RUNNER_TEMP/notes.md" <<'EOF'
 
           ---
 
-          **Download:** \`Baton-arm64.dmg\` (Apple silicon). First launch: right-click Baton.app → Open → Open — the build is not notarized yet.
-          Verify with \`shasum -a 256 -c SHA256SUMS.txt\`.
+          **Download:** `Baton-arm64.dmg` (Apple silicon). Verify with `shasum -a 256 -c SHA256SUMS.txt`.
           EOF
           cat "$RUNNER_TEMP/notes.md"
 
@@ -102,27 +105,19 @@ jobs:
         id: signing
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           if [ -n "$CSC_LINK" ]; then echo "sign=true" >> "$GITHUB_OUTPUT"; else echo "sign=false" >> "$GITHUB_OUTPUT"; fi
-          if [ -n "$CSC_LINK" ] && [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
-            echo "notarize=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "notarize=false" >> "$GITHUB_OUTPUT"
-          fi
 
-      # Default path today: ad-hoc signed, not notarized (same as a local `npm run dist`).
+      # Default: ad-hoc signed, not notarized (scripts/dist.mjs falls back when no Developer ID is available).
       - name: Build (ad-hoc signed)
         if: steps.signing.outputs.sign != 'true'
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run dist
 
-      # Future path: Developer ID signing (+ notarization when the Apple secrets exist).
-      # Edits package.json in the CI checkout only: drops the ad-hoc identity so electron-builder uses CSC_LINK,
-      # turns on the hardened runtime, and enables notarization (electron-builder reads APPLE_* from env).
+      - name: Checksums (ad-hoc build)
+        if: steps.signing.outputs.sign != 'true'
+        run: node scripts/release-artifacts.mjs
+
+      # With secrets: Developer ID signed (+ app notarized by electron-builder, DMG by release-artifacts.mjs).
       - name: Build (Developer ID signed)
         if: steps.signing.outputs.sign == 'true'
         env:
@@ -131,34 +126,20 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          NOTARIZE: ${{ steps.signing.outputs.notarize }}
-        run: |
-          node -e '
-            const fs = require("fs");
-            const p = JSON.parse(fs.readFileSync("package.json", "utf8"));
-            delete p.build.mac.identity;
-            p.build.mac.hardenedRuntime = true;
-            p.build.mac.notarize = process.env.NOTARIZE === "true";
-            fs.writeFileSync("package.json", JSON.stringify(p, null, 2) + "\n");
-          '
-          npm run dist
+        run: npm run dist
 
-      - name: Collect assets + checksums
-        id: assets
+      - name: Notarize DMG + checksums (signed build)
+        if: steps.signing.outputs.sign == 'true'
         env:
-          VERSION: ${{ steps.ver.outputs.version }}
-        run: |
-          cd release
-          test -f Baton-arm64.dmg || { echo "::error::release/Baton-arm64.dmg not built"; ls -la; exit 1; }
-          ZIP="Baton-${VERSION}-arm64-mac.zip"
-          test -f "$ZIP" || { echo "::error::release/$ZIP not built"; ls -la; exit 1; }
-          cp Baton-arm64.dmg "Baton-${VERSION}-arm64.dmg"
-          shasum -a 256 Baton-arm64.dmg "Baton-${VERSION}-arm64.dmg" "$ZIP" > SHA256SUMS.txt
-          cat SHA256SUMS.txt
-          ls -la
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/release-artifacts.mjs
 
       - name: Create or update GitHub Release
+        if: github.event_name == 'workflow_dispatch' || steps.signing.outputs.sign == 'true'
         env:
+          REPLACE: ${{ inputs.replace_existing || steps.signing.outputs.sign == 'true' }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
@@ -169,6 +150,9 @@ jobs:
             "release/SHA256SUMS.txt"
           )
           if gh release view "$TAG" >/dev/null 2>&1; then
+            if [ "$REPLACE" != "true" ]; then
+              echo "::error::Release $TAG already exists. Re-run with replace_existing to overwrite its assets."; exit 1
+            fi
             echo "Release $TAG exists — updating notes and replacing assets."
             gh release edit "$TAG" --title "Baton $VERSION" --notes-file "$RUNNER_TEMP/notes.md"
             gh release upload "$TAG" "${FILES[@]}" --clobber

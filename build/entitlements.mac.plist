@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened-runtime entitlements for Baton (main app, its Electron helpers, and Resources/baton-desktop-helper).
+  Kept to the minimum:
+    allow-jit                        V8 (Electron's JavaScript engine) needs MAP_JIT memory.
+    automation.apple-events          Baton opens Terminal windows via osascript (NSAppleEventsUsageDescription);
+                                     the hardened runtime blocks Apple Events from the app's processes without it.
+  Deliberately NOT included:
+    allow-unsigned-executable-memory  only needed by old Electron/V8; allow-jit covers current Electron.
+    disable-library-validation        Baton loads no third-party dylibs or native Node modules; every binary in
+                                      the bundle is signed with the same Developer ID.
+-->
+<plist version="1.0">
+  <dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+  </dict>
+</plist>
