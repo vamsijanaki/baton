@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baton for Mac</title>
-<meta name="description" content="Baton is a free, open-source Mac app for one person with more than one Claude Code account. Continue any project, with its whole history, as whichever of your accounts fits the work.">
+<meta name="description" content="Switch between your personal and work Claude accounts without losing the conversation. Baton is a free, open-source Mac app that keeps one history per project and lets any of your own accounts continue it, in Terminal or the Claude desktop app.">
 <link rel="canonical" href="https://trybaton.app/">
 <meta name="theme-color" content="#0b0f0e" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#fbfcfc" media="(prefers-color-scheme: light)">
@@ -15,14 +15,14 @@
 <meta property="og:site_name" content="Baton">
 <meta property="og:url" content="https://trybaton.app/">
 <meta property="og:title" content="Baton: your Claude Code accounts, one history">
-<meta property="og:description" content="A free, open-source Mac app. Continue any project, with its whole history, as whichever of your own accounts fits the work.">
+<meta property="og:description" content="Switch between your personal and work Claude accounts without losing the conversation. Free and open source, for Mac.">
 <meta property="og:image" content="https://trybaton.app/assets/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Baton: Your Claude Code accounts. One history.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Baton: your Claude Code accounts, one history">
-<meta name="twitter:description" content="A free, open-source Mac app. Continue any project, with its whole history, as whichever of your own accounts fits the work.">
+<meta name="twitter:description" content="Switch between your personal and work Claude accounts without losing the conversation. Free and open source, for Mac.">
 <meta name="twitter:image" content="https://trybaton.app/assets/og.png">
 <link rel="preload" as="image" href="/assets/screens/popover.webp" type="image/webp">
 <style>
@@ -45,6 +45,8 @@
   --nav-bg: rgba(11, 15, 14, .72);
   --shot-shadow: 0 0 0 1px rgba(220,240,235,.08), 0 30px 80px -30px rgba(0,0,0,.8), 0 10px 30px -15px rgba(0,0,0,.6);
   --grid: rgba(220, 240, 235, .045);
+  --term-bg: #070a09; --term-fg: #d8e2df; --term-dim: #6f7d7a; --term-line: rgba(220,240,235,.1);
+  --term-hi: #ffffff; --term-warn: #e8b26a; --accent-term: #3cc2b0; --acct-p: #4f9a8c; --acct-w: #a68aa6;
   --f-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --f-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --max: 1120px;
@@ -59,6 +61,7 @@
     --nav-bg: rgba(251, 252, 252, .78);
     --shot-shadow: 0 0 0 1px rgba(11,30,26,.1), 0 30px 70px -30px rgba(11,30,26,.4), 0 8px 24px -12px rgba(11,30,26,.25);
     --grid: rgba(11, 30, 26, .05);
+    --term-bg: #111817; --term-fg: #e2eae8; --term-dim: #85928f; --term-line: rgba(220,240,235,.12);
     color-scheme: light;
   }
 }
@@ -70,6 +73,7 @@
   --nav-bg: rgba(251, 252, 252, .78);
   --shot-shadow: 0 0 0 1px rgba(11,30,26,.1), 0 30px 70px -30px rgba(11,30,26,.4), 0 8px 24px -12px rgba(11,30,26,.25);
   --grid: rgba(11, 30, 26, .05);
+  --term-bg: #111817; --term-fg: #e2eae8; --term-dim: #85928f; --term-line: rgba(220,240,235,.12);
   color-scheme: light;
 }
 
@@ -300,6 +304,134 @@ footer .wrap { display: grid; gap: 24px; }
 .foot-links a:hover { color: var(--fg); }
 .foot-fine { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; }
 
+/* Section head shared by the story sections */
+.sec-head { display: grid; gap: 18px; max-width: 760px; }
+.sec-head.center { margin-inline: auto; }
+.sec-body { margin-top: clamp(40px, 5vw, 64px); }
+
+/* The problem: two terminals side by side, then three smaller pains */
+.problem { padding-bottom: clamp(64px, 8vw, 104px); }
+.terms { display: grid; gap: 28px; }
+@media (min-width: 860px) { .terms { grid-template-columns: 1fr 1fr; gap: 24px; } }
+.term { min-width: 0; display: grid; gap: 14px; align-content: start; }
+.term-win { border-radius: 12px; background: var(--term-bg); color: var(--term-fg); box-shadow: var(--shot-shadow); overflow: hidden; }
+.term-bar { position: relative; display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px; border-bottom: 1px solid var(--term-line); font: 500 12px/1 var(--f-sans); color: var(--term-dim); }
+.term-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--term-line); }
+.term-bar b { position: absolute; left: 0; right: 0; text-align: center; font-weight: 500; pointer-events: none; }
+.term-body { padding: 16px 18px 20px; font: 400 13px/1.7 var(--f-mono); overflow-x: auto; white-space: pre; min-height: 214px; }
+.term-body .p { color: var(--accent-term); }
+.term-body .d { color: var(--term-dim); }
+.term-body .hi { color: var(--term-hi); }
+.term-body .sel { color: var(--term-hi); }
+.term-body .warn { color: var(--term-warn); }
+.caret { display: inline-block; width: 8px; height: 15px; background: var(--term-fg); vertical-align: -2px; animation: blink 1.1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+@media (max-width: 480px) { .term-body { font-size: 11px; padding: 14px 14px 18px; min-height: 0; } }
+.term-cap { font-size: 15.5px; color: var(--fg-2); }
+.term-cap b { color: var(--fg); font-weight: 600; }
+
+.pains { list-style: none; margin: clamp(56px, 7vw, 88px) 0 0; padding: 0; display: grid; border-top: 1px solid var(--line); }
+@media (min-width: 860px) { .pains { grid-template-columns: repeat(3, 1fr); } .pains li + li { border-left: 1px solid var(--line); } }
+@media (max-width: 859px) { .pains li + li { border-top: 1px solid var(--line); } }
+.pains li { min-width: 0; padding: 32px clamp(0px, 2.4vw, 28px); display: grid; gap: 12px; align-content: start; }
+@media (min-width: 860px) { .pains li:first-child { padding-left: 0; } .pains li:last-child { padding-right: 0; } }
+.pains h3 { font-size: 21px; letter-spacing: -.02em; line-height: 1.2; }
+.pains p { color: var(--fg-2); font-size: 16px; max-width: 38ch; }
+.mini { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; font: 500 12px/1 var(--f-mono); color: var(--fg-3); }
+.mini span { border: 1px solid var(--line-2); border-radius: 6px; padding: 6px 8px; color: var(--fg-2); background: var(--btn-2); white-space: nowrap; }
+.mini .path { white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
+.problem-close { margin-top: clamp(40px, 5vw, 56px); font-size: clamp(19px, 2vw, 23px); line-height: 1.4; letter-spacing: -.015em; max-width: 36ch; }
+.problem-close span { color: var(--fg-3); }
+
+/* Before / after */
+.ba { display: grid; gap: 20px; }
+@media (min-width: 860px) { .ba { grid-template-columns: 1fr 1fr; gap: 24px; } }
+.ba-panel { min-width: 0; border: 1px solid var(--line-2); border-radius: 16px; padding: clamp(20px, 3vw, 32px); display: grid; gap: 22px; align-content: start; background: var(--bg); }
+.ba-panel.after { border-color: var(--accent); box-shadow: 0 0 70px -24px var(--accent-glow); }
+.ba-label { font: 600 12px/1 var(--f-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--fg-3); }
+.after .ba-label { color: var(--accent); }
+.flow { display: grid; grid-template-columns: minmax(0, 1fr) 32px minmax(0, 1.15fr); row-gap: 12px; align-items: center; }
+.node { min-width: 0; border: 1px solid var(--line-2); border-radius: 10px; padding: 10px 12px; display: grid; gap: 3px; background: var(--bg-2); }
+.node b { font-size: 15px; font-weight: 600; }
+.node small { font: 400 12px/1.35 var(--f-mono); color: var(--fg-3); overflow-wrap: break-word; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
+.dot-p { background: var(--acct-p); } .dot-w { background: var(--acct-w); }
+.node.empty { border-style: dashed; background: transparent; }
+.node.empty b { color: var(--fg-3); font-weight: 500; }
+.node.hist { border-color: var(--accent); }
+.wire { width: 32px; height: 100%; min-height: 20px; display: block; }
+.wire path { fill: none; stroke: var(--line-2); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.wire.cut path { stroke-dasharray: 3 4; }
+.after .wire path { stroke: var(--accent); }
+.span2 { grid-row: span 2; align-self: stretch; }
+.span2.node { align-content: center; }
+.apps { display: grid; gap: 10px; padding-top: 20px; border-top: 1px solid var(--line); }
+.apps-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.app { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line-2); border-radius: 8px; padding: 7px 10px; font-size: 14px; font-weight: 500; white-space: nowrap; }
+.app svg { width: 16px; height: 16px; flex: none; }
+.app-p svg { color: var(--acct-p); } .app-w svg { color: var(--acct-w); }
+.apps p { font-size: 14px; color: var(--fg-3); }
+.swap { font: 500 13px/1 var(--f-mono); color: var(--fg-3); }
+
+/* How it works: a real sequence, numbered */
+.how-list { list-style: none; margin-inline: 0; margin-bottom: 0; padding: 0; display: grid; gap: clamp(64px, 9vw, 112px); }
+.how-item { display: grid; gap: 28px; align-items: center; }
+@media (min-width: 900px) { .how-item { grid-template-columns: 4fr 7fr; gap: 64px; } .how-item.wide { grid-template-columns: 3fr 8fr; gap: 56px; } }
+.how-copy { min-width: 0; display: grid; gap: 14px; align-content: start; justify-items: start; }
+.num { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--accent); color: var(--accent); font: 600 15px/1 var(--f-mono); }
+.how-copy h3 { font-size: clamp(24px, 2.6vw, 32px); line-height: 1.12; letter-spacing: -.03em; }
+.how-copy p { color: var(--fg-2); max-width: 40ch; }
+code { font: 500 .86em/1 var(--f-mono); color: var(--fg); background: var(--btn-2); border: 1px solid var(--line); border-radius: 5px; padding: 2px 5px; overflow-wrap: anywhere; }
+.how-media { min-width: 0; position: relative; isolation: isolate; width: 100%; }
+.how-media.narrow { max-width: 440px; }
+.how-media.mid { max-width: 620px; }
+
+/* Who it's for */
+.who { list-style: none; margin-inline: 0; margin-bottom: 0; padding: 0; display: grid; border-top: 1px solid var(--line); }
+@media (min-width: 860px) { .who { grid-template-columns: repeat(3, 1fr); } .who li + li { border-left: 1px solid var(--line); } }
+@media (max-width: 859px) { .who li + li { border-top: 1px solid var(--line); } }
+.who li { min-width: 0; padding: 32px clamp(0px, 2.4vw, 28px); display: grid; gap: 10px; align-content: start; }
+@media (min-width: 860px) { .who li:first-child { padding-left: 0; } .who li:last-child { padding-right: 0; } }
+.who h3 { font-size: 20px; line-height: 1.25; letter-spacing: -.02em; }
+.who p { color: var(--fg-2); font-size: 16px; }
+.who-note { margin-top: 8px; padding-top: 24px; border-top: 1px solid var(--line); font-size: 15px; color: var(--fg-3); }
+.who-note a { color: var(--fg-2); text-underline-offset: 3px; }
+
+/* Safety */
+.safe { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+@media (min-width: 900px) { .safe { grid-template-columns: repeat(3, 1fr); } }
+.safe-col { background: var(--bg); padding: clamp(24px, 3vw, 36px); display: grid; gap: 20px; align-content: start; min-width: 0; }
+.safe-col h3 { display: flex; align-items: center; gap: 10px; font-size: 18px; letter-spacing: -.015em; }
+.safe-col h3 svg { width: 20px; height: 20px; color: var(--accent); flex: none; }
+.safe-col.never h3 svg { color: var(--no); }
+.safe-col ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.safe-col li { font-size: 15.5px; line-height: 1.55; color: var(--fg-2); }
+.safe-col li b { color: var(--fg); font-weight: 600; }
+.safe-foot { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 14px; color: var(--fg-3); }
+.safe-foot a { color: var(--fg-2); text-underline-offset: 3px; text-decoration-color: var(--line-2); }
+
+/* FAQ */
+.faq-wrap { display: grid; gap: 40px; }
+@media (min-width: 960px) { .faq-wrap { grid-template-columns: 4fr 7fr; gap: 64px; align-items: start; } .faq-wrap .sec-head { position: sticky; top: 100px; } }
+.faq { border-top: 1px solid var(--line); min-width: 0; }
+.faq details { border-bottom: 1px solid var(--line); }
+.faq summary {
+  list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  padding: 20px 2px; font-size: 17.5px; font-weight: 600; letter-spacing: -.01em; border-radius: 6px;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after {
+  content: ""; flex: none; width: 9px; height: 9px; margin-right: 6px;
+  border-right: 1.6px solid var(--fg-3); border-bottom: 1.6px solid var(--fg-3);
+  transform: translateY(-3px) rotate(45deg); transition: transform .2s;
+}
+.faq details[open] summary::after { transform: translateY(2px) rotate(-135deg); }
+.faq summary:hover { color: var(--accent); }
+.faq .ans { padding: 0 2px 24px; display: grid; gap: 12px; color: var(--fg-2); font-size: 16px; max-width: 64ch; }
+.faq .ans a { color: var(--fg); text-underline-offset: 3px; text-decoration-color: var(--line-2); }
+.faq .ans a:hover { text-decoration-color: currentColor; }
+.final .install { margin-top: 18px; font-size: 15px; color: var(--fg-2); }
+
 /* Motion: content is visible at rest; JS only fades in what starts below the fold */
 .js .reveal.pending { opacity: 0; transform: translateY(18px); }
 .reveal { transition: opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1); }
@@ -307,6 +439,7 @@ footer .wrap { display: grid; gap: 24px; }
   html { scroll-behavior: auto; }
   .desk::before { animation: none; }
   .reveal, .btn { transition: none; }
+  .caret { animation: none; }
   .js .reveal.pending { opacity: 1; transform: none; }
   .btn-primary:hover { transform: none; }
 }
@@ -327,8 +460,10 @@ footer .wrap { display: grid; gap: 24px; }
   <div class="wrap">
     <a class="brand" href="/" aria-label="Baton home"><svg aria-hidden="true"><use href="#i-mark"/></svg>Baton</a>
     <nav class="nav-links" aria-label="Primary">
-      <a href="#features">Features</a>
-      <a href="#fair-use">Fair use</a>
+      <a href="#problem">Why</a>
+      <a href="#how">How it works</a>
+      <a href="#safety">Safety</a>
+      <a href="#faq">FAQ</a>
       <a href="https://github.com/vamsijanaki/baton">GitHub</a>
     </nav>
     <a class="btn btn-primary btn-sm" href="/download">Download</a>
@@ -340,7 +475,7 @@ footer .wrap { display: grid; gap: 24px; }
     <div class="wrap">
       <span class="pill"><i></i>Free &amp; open source · macOS</span>
       <h1>Your Claude Code accounts. <span>One history.</span></h1>
-      <p class="sub">Baton lives in your menu bar and lets you continue any project, with its whole history, as whichever of your own accounts fits the work.</p>
+      <p class="sub">Switch between your personal and work Claude accounts without losing the conversation. Baton keeps one history per project, and any of your accounts can pick it up in Terminal or the desktop app.</p>
       <div class="cta-row">
         <a class="btn btn-primary" href="/download"><svg aria-hidden="true"><use href="#i-apple"/></svg>Download for Mac</a>
         <a class="btn btn-ghost" href="https://github.com/vamsijanaki/baton"><svg aria-hidden="true"><use href="#i-github"/></svg>Star on GitHub</a>
@@ -366,7 +501,158 @@ footer .wrap { display: grid; gap: 24px; }
     </div>
   </div>
 
-  <section class="film" aria-labelledby="film-h">
+  <section id="problem" class="problem" aria-labelledby="problem-h">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="kicker">The problem</p>
+        <h2 class="h2" id="problem-h">Sound familiar?</h2>
+        <p class="lead">Each Claude account keeps its own history. Yesterday's session on one account doesn't exist on the other, so you start over and explain the whole project again.</p>
+      </div>
+
+      <div class="terms sec-body reveal">
+        <figure class="term" style="margin:0">
+          <div class="term-win" aria-hidden="true">
+            <div class="term-bar"><i></i><i></i><i></i><b>Personal · ~/.claude</b></div>
+<div class="term-body"><span class="p">~/Projects/acme-web $</span> claude --resume
+
+<span class="d">  Resume a conversation</span>
+<span class="sel">❯ Fix rounding in the checkout total   2h ago</span>
+  Add retries to the Stripe webhook    yesterday
+  Plan the cart refactor               3 days ago
+<span class="d">  3 sessions · 41 messages of context</span></div>
+          </div>
+          <figcaption class="term-cap"><b>Your personal account.</b> Three sessions of decisions, dead ends and fixes on acme-web.</figcaption>
+        </figure>
+        <figure class="term" style="margin:0">
+          <div class="term-win" aria-hidden="true">
+            <div class="term-bar"><i></i><i></i><i></i><b>Work · ~/.claude-work</b></div>
+<div class="term-body"><span class="p">~/Projects/acme-web $</span> claude --resume
+<span class="warn">No conversations found to resume.</span>
+
+<span class="p">~/Projects/acme-web $</span> claude
+<span class="hi">&gt; So, this is a Next.js store. Yesterday
+  we found the checkout total rounds twice,
+  and the fix was in…</span><span class="caret"></span></div>
+          </div>
+          <figcaption class="term-cap"><b>Your work account.</b> Same project, same Mac. Claude has never heard of it.</figcaption>
+        </figure>
+      </div>
+
+      <ul class="pains reveal">
+        <li>
+          <div class="mini" aria-hidden="true"><span>9:05 Personal</span>→<span>11:40 Work</span>→<span>14:15 Personal</span>→<span>…</span></div>
+          <h3>Sign out. Sign in. Repeat.</h3>
+          <p>The Claude desktop app holds one account at a time. Switching means signing out and back in, several times a day.</p>
+        </li>
+        <li>
+          <div class="mini" aria-hidden="true"><span>summary-for-work.md</span><span>summary-v2.md</span><span>summary-final.md</span></div>
+          <h3>Copy, paste, summarise.</h3>
+          <p>You ask one account to summarise the session, paste it into the other, and lose half the detail on the way.</p>
+        </li>
+        <li>
+          <div class="mini" aria-hidden="true"><span class="path">~/.claude/projects/-Users-alex-Projects-acme-web/</span></div>
+          <h3>Which account was that on?</h3>
+          <p>You can't remember which account had the chat you need. The files live in folders like this one, and moving them by hand feels like a good way to lose them.</p>
+        </li>
+      </ul>
+
+      <p class="problem-close reveal">You already have the right accounts. <span>What's missing is one place for each project's history, so whichever account you open can pick it up.</span></p>
+    </div>
+  </section>
+
+  <section id="fix" aria-labelledby="fix-h" style="padding-top:0">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="kicker">With Baton</p>
+        <h2 class="h2" id="fix-h">One history per project. Any of your accounts can continue it.</h2>
+        <p class="lead">Transcripts stay where Claude Code already keeps them. You choose which accounts can open each project, and each account gets its own desktop app.</p>
+      </div>
+
+      <div class="ba sec-body reveal">
+        <div class="ba-panel before">
+          <p class="ba-label">Without Baton</p>
+          <div class="flow">
+            <div class="node" style="grid-column:1;grid-row:1"><b><span class="dot dot-p"></span>Personal</b><small>~/.claude</small></div>
+            <svg class="wire" style="grid-column:2;grid-row:1" viewBox="0 0 32 40" preserveAspectRatio="none" aria-hidden="true"><path d="M0 20H32"/></svg>
+            <div class="node" style="grid-column:3;grid-row:1"><b>acme-web</b><small>3 sessions</small></div>
+            <div class="node" style="grid-column:1;grid-row:2"><b><span class="dot dot-w"></span>Work</b><small>~/.claude-work</small></div>
+            <svg class="wire cut" style="grid-column:2;grid-row:2" viewBox="0 0 32 40" preserveAspectRatio="none" aria-hidden="true"><path d="M0 20H32"/></svg>
+            <div class="node empty" style="grid-column:3;grid-row:2"><b>acme-web</b><small>no history</small></div>
+          </div>
+          <div class="apps">
+            <div class="apps-row">
+              <span class="app"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 5.5h13" stroke="currentColor" stroke-width="1.3"/></svg>Claude</span>
+              <span class="swap">Personal ⇄ Work</span>
+            </div>
+            <p>One desktop app, one account at a time. Sign out to switch.</p>
+          </div>
+        </div>
+
+        <div class="ba-panel after">
+          <p class="ba-label">With Baton</p>
+          <div class="flow">
+            <div class="node" style="grid-column:1;grid-row:1"><b><span class="dot dot-p"></span>Personal</b><small>~/.claude</small></div>
+            <div class="node" style="grid-column:1;grid-row:2"><b><span class="dot dot-w"></span>Work</b><small>~/.claude-work</small></div>
+            <svg class="wire span2" style="grid-column:2;grid-row:1 / span 2" viewBox="0 0 32 100" preserveAspectRatio="none" aria-hidden="true"><path d="M0 24C18 24 14 50 32 50"/><path d="M0 76C18 76 14 50 32 50"/></svg>
+            <div class="node hist span2" style="grid-column:3;grid-row:1 / span 2"><b>acme-web</b><small>one history · 3 sessions</small><small>~/.claude/<wbr>projects</small></div>
+          </div>
+          <div class="apps">
+            <div class="apps-row">
+              <span class="app app-p"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 5.5h13" stroke="currentColor" stroke-width="1.3"/></svg>Claude</span>
+              <span class="app app-w"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 5.5h13" stroke="currentColor" stroke-width="1.3"/></svg>Claude Work</span>
+            </div>
+            <p>A desktop app per account, open side by side, each signed in once.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how" aria-labelledby="how-h" style="padding-top:0">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="kicker">How it works</p>
+        <h2 class="h2" id="how-h">Set it up once. Then it's one click.</h2>
+      </div>
+      <ol class="how-list sec-body">
+        <li class="how-item wide reveal">
+          <div class="how-copy">
+            <span class="num" aria-hidden="true">1</span>
+            <h3>Add your accounts</h3>
+            <p>Your current Claude Code sign-in becomes account 1, and Baton never writes to it. Each account you add gets its own folder, like <code>~/.claude-work</code>. You sign in to it yourself, once, with Claude Code's own login.</p>
+          </div>
+          <div class="how-media media-glow">
+            <img class="shot" src="/assets/screens/step-accounts.webp" width="1600" height="723" loading="lazy" decoding="async"
+                 alt="Baton's Accounts screen: Personal (alex@example.com) and Work (alex@company.example), each with its Terminal folder signed in and its own desktop app.">
+          </div>
+        </li>
+        <li class="how-item reveal">
+          <div class="how-copy">
+            <span class="num" aria-hidden="true">2</span>
+            <h3>Choose which projects each account can continue</h3>
+            <p>Nothing is shared until you say so. Turn Work on for acme-web and Work can pick up its sessions, while your other projects stay private. Baton shows you every file it will change before it changes anything.</p>
+          </div>
+          <div class="how-media mid media-glow">
+            <img class="shot" src="/assets/screens/step-share.webp" width="1200" height="894" loading="lazy" decoding="async"
+                 alt="The Share acme-web dialog: Personal always holds the history, and a switch lets Work continue this project. Turning Work off hides its acme-web chats in a backup.">
+          </div>
+        </li>
+        <li class="how-item reveal">
+          <div class="how-copy">
+            <span class="num" aria-hidden="true">3</span>
+            <h3>Pick an account from the menu bar and continue</h3>
+            <p>Choose the project, then the account. <b>Continue in Terminal</b> picks up the latest session with its full history. <b>Open desktop app</b> shows the same chats in that account's own Claude app.</p>
+          </div>
+          <div class="how-media narrow media-glow">
+            <img class="shot" src="/assets/screens/step-continue.webp" width="1080" height="830" loading="lazy" decoding="async"
+                 alt="Baton's menu-bar panel with the acme-web project selected and the Personal account's Continue in Terminal and Open desktop app buttons.">
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="film" aria-labelledby="film-h" style="padding-top:0">
     <div class="wrap">
       <div class="center stack reveal">
         <p class="kicker">37 seconds</p>
@@ -384,13 +670,13 @@ footer .wrap { display: grid; gap: 24px; }
     </div>
   </section>
 
-  <section id="features" aria-label="Features" style="padding-top:0">
+  <section id="features" aria-label="Features">
     <div class="wrap features">
       <div class="feature reveal">
         <div class="copy">
           <p class="kicker">Sessions</p>
-          <h2>One history. Every account.</h2>
-          <p class="desc">Start a project as Personal, continue it as Work. Same chats, same context, in Terminal or the Claude desktop app.</p>
+          <h2>Every session, in one list.</h2>
+          <p class="desc">See a project's sessions with time, size and git branch. Resume any of them as any account you've allowed.</p>
         </div>
         <div class="media media-glow">
           <img class="shot" src="/assets/screens/history.webp" width="2000" height="1288" loading="lazy" decoding="async"
@@ -400,13 +686,13 @@ footer .wrap { display: grid; gap: 24px; }
 
       <div class="feature flip reveal">
         <div class="copy">
-          <p class="kicker">Shared projects</p>
-          <h2>You choose who sees what.</h2>
-          <p class="desc">Nothing is shared by default. Switch an account on per project, and its other projects stay private.</p>
+          <p class="kicker">Desktop apps</p>
+          <h2>A desktop app for each account.</h2>
+          <p class="desc">Each extra account gets its own copy of the Claude desktop app, with a tinted icon and its own data folder. Keep them open side by side and stop signing out.</p>
         </div>
         <div class="media media-glow">
-          <img class="shot" src="/assets/screens/share.webp" width="2000" height="1288" loading="lazy" decoding="async"
-               alt="The Share acme-web dialog: Personal always holds the history; a switch lets Work continue this project.">
+          <img class="shot" src="/assets/screens/desktop-apps.webp" width="1600" height="554" loading="lazy" decoding="async"
+               alt="Desktop apps on this Mac: Claude (default) for alex@example.com and copies signed in as alex@company.example, each with its own data folder.">
         </div>
       </div>
 
@@ -427,18 +713,72 @@ footer .wrap { display: grid; gap: 24px; }
     </div>
   </section>
 
-  <section class="trust" aria-label="Privacy and safety">
+  <section id="who" aria-labelledby="who-h">
     <div class="wrap">
-      <ul class="reveal">
-        <li><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="9" width="12" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 9V6.5a3 3 0 0 1 6 0V9" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>Never reads your login tokens</li>
-        <li><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5 3.5 5v4.5c0 4 2.8 6.9 6.5 8 3.7-1.1 6.5-4 6.5-8V5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>Never modifies Claude</li>
-        <li><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 17h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>No servers, no telemetry</li>
-        <li><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 6-4 4 4 4m6-8 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Open source, MIT</li>
+      <div class="sec-head reveal">
+        <p class="kicker">Who it's for</p>
+        <h2 class="h2" id="who-h">One person, more than one Claude account.</h2>
+      </div>
+      <ul class="who sec-body reveal">
+        <li>
+          <h3>Developers with a personal and a work account</h3>
+          <p>Side projects on your own plan, company code on the account your employer gives you, and one place to see both.</p>
+        </li>
+        <li>
+          <h3>Freelancers with a client's seat</h3>
+          <p>A client gave you an account for their work. Keep their code on their account, keep yours on yours, and still find last week's session.</p>
+        </li>
+        <li>
+          <h3>People who use Terminal and the desktop app</h3>
+          <p>Baton works with Claude Code in Terminal and in the desktop app's Code tab, so a shared project's chats show up in both.</p>
+        </li>
       </ul>
+      <p class="who-note reveal">Baton isn't for sharing an account with someone else, or for collecting personal plans to get more usage. <a href="#fair-use">Read the fair-use rules</a>.</p>
     </div>
   </section>
 
-  <section id="fair-use" aria-labelledby="fair-h">
+  <section id="safety" aria-labelledby="safety-h" style="padding-top:0">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="kicker">Safety</p>
+        <h2 class="h2" id="safety-h">Careful with your files, on purpose.</h2>
+        <p class="lead">Your chat history is the one thing you can't get back, so Baton treats it that way.</p>
+      </div>
+      <div class="safe sec-body reveal">
+        <div class="safe-col">
+          <h3><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 6.5h13M3.5 10h13M3.5 13.5h8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>What it touches</h3>
+          <ul>
+            <li><b>One link per shared project</b>, inside the extra account's folder, such as <code>~/.claude-work/projects</code>.</li>
+            <li><b>The chat-list files</b> of each desktop app copy, so shared projects show up in its Code tab.</li>
+            <li><b>Its own folder</b>, <code>~/.baton</code>, for backups, the journal and settings.</li>
+            <li><b>An account's status line setting</b>, only if you turn on live usage for that account.</li>
+          </ul>
+        </div>
+        <div class="safe-col never">
+          <h3><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 15 15 5" stroke="currentColor" stroke-width="1.5"/></svg>What it never does</h3>
+          <ul>
+            <li>Read your login tokens or the Keychain.</li>
+            <li>Write anything inside <code>~/.claude</code>, your first account.</li>
+            <li>Delete or overwrite a transcript.</li>
+            <li>Modify Claude Code or <code>/Applications/Claude.app</code>.</li>
+            <li>Send anything off your Mac. No servers, no telemetry.</li>
+          </ul>
+        </div>
+        <div class="safe-col">
+          <h3><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8h7.5a4 4 0 0 1 0 8H8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 4.5 4.5 8 8 11.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>How you undo it</h3>
+          <ul>
+            <li><b>Preview first.</b> Every change lists its exact file operations before you apply it.</li>
+            <li><b>Verified backup.</b> Each path is snapshotted, and the snapshot checked, before anything is written.</li>
+            <li><b>Automatic rollback</b> if any step fails.</li>
+            <li><b>One-click Undo</b> for every operation in History &amp; restore. Nothing is deleted: removed items go to a backup or the macOS Trash.</li>
+          </ul>
+        </div>
+      </div>
+      <p class="safe-foot reveal"><span>Open source, MIT licensed.</span><a href="https://github.com/vamsijanaki/baton">Read the code on GitHub</a><a href="https://github.com/vamsijanaki/baton/blob/main/SECURITY.md">Security policy</a></p>
+    </div>
+  </section>
+
+  <section id="fair-use" aria-labelledby="fair-h" style="padding-top:0">
     <div class="wrap">
       <div class="center stack reveal">
         <p class="kicker">Fair use</p>
@@ -468,7 +808,93 @@ footer .wrap { display: grid; gap: 24px; }
         <a href="https://www.anthropic.com/legal/aup">Usage Policy</a>
         <a href="https://www.anthropic.com/legal/consumer-terms">Consumer Terms</a>
         <a href="https://code.claude.com/docs/en/legal-and-compliance">Claude Code legal and compliance</a>
+        <a href="https://github.com/vamsijanaki/baton/blob/main/FAIR-USE.md">Baton's full fair-use text</a>
       </p>
+    </div>
+  </section>
+
+  <section id="faq" aria-labelledby="faq-h" style="padding-top:0">
+    <div class="wrap faq-wrap">
+      <div class="sec-head reveal">
+        <p class="kicker">FAQ</p>
+        <h2 class="h2" id="faq-h">Questions people ask.</h2>
+        <p class="lead">Short answers here. The <a href="https://github.com/vamsijanaki/baton#readme" style="color:var(--fg);text-underline-offset:3px">README</a> has the details.</p>
+      </div>
+      <div class="faq reveal">
+        <details>
+          <summary>Is this allowed by Anthropic?</summary>
+          <div class="ans">
+            <p>Baton is built for one person using their own accounts, like a personal plan and the account your employer gives you. It signs in only through Claude Code's and the Claude app's own sign-in, and it never shares or copies a sign-in.</p>
+            <p>Don't use it to share an account, to rotate personal plans past their limits, or to keep working after an account is suspended. Anthropic's <a href="https://www.anthropic.com/legal/aup">Usage Policy</a> and <a href="https://www.anthropic.com/legal/consumer-terms">Consumer Terms</a> are what count, so read them. This isn't legal advice.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Does Baton read my Claude login or tokens?</summary>
+          <div class="ans">
+            <p>No. Baton never reads, copies or stores credentials, and never touches the Keychain. To label your accounts it reads only non-secret fields: the email, the account id and the plan type. You sign in to each account yourself, in Claude Code or the Claude app.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Can it lose my chats?</summary>
+          <div class="ans">
+            <p>Baton never deletes or overwrites a transcript. Every change is shown to you first, backed up to a snapshot that is checked before anything is written, and rolled back automatically if a step fails. Every operation has a one-click Undo.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Does it change Claude?</summary>
+          <div class="ans">
+            <p>No. Baton runs the official <code>claude</code> command and the official desktop app, unmodified. Each extra desktop app is a byte-identical copy of Claude.app with Anthropic's signature intact, started with its own data folder. Only its Finder icon is tinted so you can tell them apart.</p>
+          </div>
+        </details>
+        <details>
+          <summary>What happens when I turn sharing off?</summary>
+          <div class="ans">
+            <p>That account can no longer continue the project in Terminal, and the project's chats are hidden from that account's desktop app by moving them into a backup. Turn sharing back on and they come back. The transcripts themselves are never touched, and your first account always sees everything.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Does it work with the Claude desktop app, or only Terminal?</summary>
+          <div class="ans">
+            <p>Both. Continue a project in Terminal with Claude Code, or open the same chats in that account's desktop app, in the Code tab. The first time Baton opens Terminal for you, macOS asks you to allow it. That's how it opens a window as the account you chose.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Can two accounts work on the same project at the same time?</summary>
+          <div class="ans">
+            <p>Please don't. Two sessions writing to one history get mixed up. Before opening anything, Baton checks whether another account is still working in that project and warns you. It can show or quit the other one, and it asks first.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Can my company see chats in my work account?</summary>
+          <div class="ans">
+            <p>It might. Work, Team and Enterprise accounts belong to your organisation, and its admins may be able to see what's in them. When you share a project into a work account, Baton tells you that before anything changes. Sharing from a work account into a personal one gets a note too, because it may move your employer's code. Check your company's policy.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Does Baton send any data anywhere?</summary>
+          <div class="ans">
+            <p>No. There are no Baton servers and no telemetry. Your history stays on your Mac, and the source code is public so you can check.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Does it run on Windows, Linux or Intel Macs?</summary>
+          <div class="ans">
+            <p>Not for now. Baton is a Mac app for Apple silicon. You need Claude Code installed; the Claude desktop app is optional.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Is it free?</summary>
+          <div class="ans">
+            <p>Yes. Baton is free and open source under the MIT license, with no paid tier. If it saves you time, <a href="https://github.com/sponsors/vamsijanaki">sponsoring on GitHub</a> helps pay for its upkeep.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Is Baton made by Anthropic?</summary>
+          <div class="ans">
+            <p>No. Baton is an independent open-source project. It isn't affiliated with or endorsed by Anthropic.</p>
+          </div>
+        </details>
+      </div>
     </div>
   </section>
 
@@ -480,6 +906,7 @@ footer .wrap { display: grid; gap: 24px; }
         <a class="btn btn-primary" href="/download"><svg aria-hidden="true"><use href="#i-apple"/></svg>Download for Mac</a>
         <a class="btn btn-ghost" href="https://github.com/vamsijanaki/baton"><svg aria-hidden="true"><use href="#i-github"/></svg>View on GitHub</a>
       </div>
+      <p class="install">Download, open the DMG, drag Baton to Applications.</p>
       <p class="cta-note">Free forever. If it saves you time, <a href="https://github.com/sponsors/vamsijanaki">sponsor the project</a>.</p>
     </div>
   </section>
@@ -494,6 +921,7 @@ footer .wrap { display: grid; gap: 24px; }
         <a href="https://github.com/vamsijanaki/baton">GitHub</a>
         <a href="https://github.com/sponsors/vamsijanaki">Sponsor</a>
         <a href="https://github.com/vamsijanaki/baton/blob/main/FAIR-USE.md">Fair use</a>
+        <a href="#faq">FAQ</a>
       </nav>
     </div>
     <div class="foot-fine">
