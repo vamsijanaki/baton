@@ -8,6 +8,9 @@ Every pull request with a user-visible change adds a line under **Unreleased** (
 
 ## [Unreleased]
 
+### Changed
+- The release script now updates the version shown under the website's download button, so the site always names the latest release.
+
 ## [1.1.0] - 2026-10-25
 
 ### Added

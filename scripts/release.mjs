@@ -122,6 +122,17 @@ if (fs.existsSync(lockPath)) {
   files.push('package-lock.json');
 }
 
+// The website's download note ("v1.2.3 · Apple silicon · Changelog") follows the release.
+const sitePath = path.join(root, 'site', 'index.html');
+if (fs.existsSync(sitePath)) {
+  const siteText = fs.readFileSync(sitePath, 'utf8');
+  const siteNext = siteText.replace(/(<p class="cta-note">)v\d+\.\d+\.\d+( · )/g, `$1v${next}$2`);
+  if (siteNext !== siteText) {
+    fs.writeFileSync(sitePath, siteNext);
+    files.push('site/index.html');
+  }
+}
+
 // ---- commit + tag (repo's configured author; no trailers) ----
 git('add', '--', ...files);
 git('commit', '-m', `Release ${tag}`, '--', ...files);
