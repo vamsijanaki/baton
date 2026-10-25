@@ -18,7 +18,7 @@ say a personal one and a work one. Continue any project, with its whole history,
 
 <p>
   <a href="https://github.com/vamsijanaki/baton/releases/latest"><strong>Download</strong></a> ·
-  <!-- Website: add the link here once the domain is chosen, e.g. <a href="https://example.com">Website</a> · -->
+  <a href="https://trybaton.app">Website</a> ·
   <a href="FAIR-USE.md">Fair use</a> ·
   <a href="https://github.com/sponsors/vamsijanaki">Sponsor</a>
 </p>

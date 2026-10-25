@@ -4,792 +4,545 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baton for Mac</title>
-<meta name="description" content="Baton is a free, open-source Mac app for one person with several Claude accounts of their own. Continue the same project, with the same conversation history, from any of your accounts.">
-<meta name="color-scheme" content="light dark">
-<link rel="icon" type="image/svg+xml" href="assets/icon.svg">
-<link rel="apple-touch-icon" href="assets/icon-256.png">
-<meta property="og:title" content="Baton for Mac">
-<meta property="og:description" content="Your Claude accounts, one history. Free and open source.">
-<meta property="og:image" content="assets/screens/01-accounts.png">
-
-<!-- ============ SITE CONFIG: the only place links are set ============ -->
-<script>
-  window.BATON = {
-    download: "https://github.com/vamsijanaki/baton/releases/latest",
-    source:   "https://github.com/vamsijanaki/baton",
-    sponsor:  "https://github.com/sponsors/vamsijanaki",
-    version:  "1.0.0"
-  };
-</script>
-<!-- =================================================================== -->
-
+<meta name="description" content="Baton is a free, open-source Mac app for one person with more than one Claude Code account. Continue any project, with its whole history, as whichever of your accounts fits the work.">
+<link rel="canonical" href="https://trybaton.app/">
+<meta name="theme-color" content="#0b0f0e" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfcfc" media="(prefers-color-scheme: light)">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/assets/icon-256.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Baton">
+<meta property="og:url" content="https://trybaton.app/">
+<meta property="og:title" content="Baton: your Claude Code accounts, one history">
+<meta property="og:description" content="A free, open-source Mac app. Continue any project, with its whole history, as whichever of your own accounts fits the work.">
+<meta property="og:image" content="https://trybaton.app/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Baton: Your Claude Code accounts. One history.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Baton: your Claude Code accounts, one history">
+<meta name="twitter:description" content="A free, open-source Mac app. Continue any project, with its whole history, as whichever of your own accounts fits the work.">
+<meta name="twitter:image" content="https://trybaton.app/assets/og.png">
+<link rel="preload" as="image" href="/assets/screens/popover.webp" type="image/webp">
 <style>
-/* Layout: a relay track. Accounts run in numbered lanes; every section hands the
-   reader on to the next leg. Wide editorial column, real screenshots in plain
-   window frames, one moving diagram. */
+/* Layout: one centered column on a near-black desk. The menu-bar popover is the hero
+   object; features alternate text/screen on a 12-col grid; hairlines, no cards. */
 :root {
-  --bg: #f2f5f4;
-  --surface: #ffffff;
-  --sunk: #e6ecea;
-  --ink: #12201d;
-  --ink-2: #4a5b57;
-  --ink-3: #6c7b78;
-  --rule: #d3dcd9;
-  --accent: #0d7f72;
-  --accent-ink: #ffffff;
-  --accent-soft: #d6ece8;
-  --lane-1: #3f7566;   /* Personal dot in the app */
-  --lane-2: #93799a;   /* Work dot in the app */
-  --do: #0d7f72;
-  --dont: #a2433a;
-  --dont-soft: #f4e3e0;
-  --shadow: 0 1px 2px rgba(18, 32, 29, .06), 0 18px 40px -18px rgba(18, 32, 29, .28);
-
-  --f-display: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --f-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --f-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-
-  --s-0: .8125rem;  /* 13 */
-  --s-1: .9375rem;  /* 15 */
-  --s-2: 1.0625rem; /* 17 */
-  --s-3: 1.375rem;  /* 22 */
-  --s-4: clamp(1.75rem, 1.2rem + 2vw, 2.5rem);
-  --s-5: clamp(2.6rem, 1.4rem + 5.4vw, 5.6rem);
-
-  --radius: 14px;
-  --max: 1160px;
+  --bg: #0b0f0e;
+  --bg-2: #101615;
+  --fg: #eef3f2;
+  --fg-2: #a3b0ad;
+  --fg-3: #6f7d7a;
+  --line: rgba(220, 240, 235, .09);
+  --line-2: rgba(220, 240, 235, .16);
+  --accent: #3cc2b0;
+  --accent-ink: #04211d;
+  --accent-glow: rgba(60, 194, 176, .22);
+  --no: #e3897d;
+  --btn-2: rgba(255, 255, 255, .06);
+  --btn-2-hover: rgba(255, 255, 255, .1);
+  --nav-bg: rgba(11, 15, 14, .72);
+  --shot-shadow: 0 0 0 1px rgba(220,240,235,.08), 0 30px 80px -30px rgba(0,0,0,.8), 0 10px 30px -15px rgba(0,0,0,.6);
+  --grid: rgba(220, 240, 235, .045);
+  --f-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --f-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --max: 1120px;
+  color-scheme: dark;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0d1513; --surface: #15201d; --sunk: #1b2925; --ink: #e6efec; --ink-2: #a9bbb6; --ink-3: #87998f;
-    --rule: #2a3a36; --accent: #3cc2b0; --accent-ink: #062521; --accent-soft: #163a35;
-    --lane-1: #6fb8a1; --lane-2: #c3a3cb; --do: #3cc2b0; --dont: #e88b80; --dont-soft: #3a211e;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 22px 50px -20px rgba(0,0,0,.7);
-    color-scheme: dark;
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #fbfcfc; --bg-2: #f2f5f4; --fg: #0b0f0e; --fg-2: #4b5755; --fg-3: #75817e;
+    --line: rgba(11, 30, 26, .09); --line-2: rgba(11, 30, 26, .16);
+    --accent: #0d7f72; --accent-ink: #ffffff; --accent-glow: rgba(13, 127, 114, .16);
+    --no: #a6473b; --btn-2: rgba(11, 30, 26, .04); --btn-2-hover: rgba(11, 30, 26, .08);
+    --nav-bg: rgba(251, 252, 252, .78);
+    --shot-shadow: 0 0 0 1px rgba(11,30,26,.1), 0 30px 70px -30px rgba(11,30,26,.4), 0 8px 24px -12px rgba(11,30,26,.25);
+    --grid: rgba(11, 30, 26, .05);
+    color-scheme: light;
   }
 }
-:root[data-theme="dark"] {
-  --bg: #0d1513; --surface: #15201d; --sunk: #1b2925; --ink: #e6efec; --ink-2: #a9bbb6; --ink-3: #87998f;
-  --rule: #2a3a36; --accent: #3cc2b0; --accent-ink: #062521; --accent-soft: #163a35;
-  --lane-1: #6fb8a1; --lane-2: #c3a3cb; --do: #3cc2b0; --dont: #e88b80; --dont-soft: #3a211e;
-  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 22px 50px -20px rgba(0,0,0,.7);
-  color-scheme: dark;
+:root[data-theme="light"] {
+  --bg: #fbfcfc; --bg-2: #f2f5f4; --fg: #0b0f0e; --fg-2: #4b5755; --fg-3: #75817e;
+  --line: rgba(11, 30, 26, .09); --line-2: rgba(11, 30, 26, .16);
+  --accent: #0d7f72; --accent-ink: #ffffff; --accent-glow: rgba(13, 127, 114, .16);
+  --no: #a6473b; --btn-2: rgba(11, 30, 26, .04); --btn-2-hover: rgba(11, 30, 26, .08);
+  --nav-bg: rgba(251, 252, 252, .78);
+  --shot-shadow: 0 0 0 1px rgba(11,30,26,.1), 0 30px 70px -30px rgba(11,30,26,.4), 0 8px 24px -12px rgba(11,30,26,.25);
+  --grid: rgba(11, 30, 26, .05);
+  color-scheme: light;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+html { overflow-x: clip; -webkit-text-size-adjust: 100%; scroll-behavior: smooth; scroll-padding-top: 72px; }
 body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--ink);
-  font: 400 var(--s-2)/1.6 var(--f-body);
-  padding-top: env(safe-area-inset-top, 0px);
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 400 17px/1.6 var(--f-sans);
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  overflow-x: hidden;
+  overflow-x: clip;
 }
-img { max-width: 100%; height: auto; display: block; }
-a { color: var(--accent); text-underline-offset: .18em; text-decoration-thickness: 1px; }
-a:hover { text-decoration-thickness: 2px; }
-:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
-code, kbd { font-family: var(--f-mono); font-size: .88em; }
-:not(pre) > code { background: var(--sunk); padding: .08em .35em; border-radius: 5px; overflow-wrap: anywhere; }
-h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -.02em; line-height: 1.08; }
-h2 { font-size: var(--s-4); font-weight: 800; }
-h3 { font-size: var(--s-3); font-weight: 700; letter-spacing: -.01em; }
+img, video { max-width: 100%; height: auto; display: block; }
+a { color: inherit; }
 p { margin: 0; }
-
-.skip { position: absolute; left: -999px; top: 8px; background: var(--surface); color: var(--ink); padding: 8px 12px; border-radius: 8px; z-index: 20; }
+h1, h2, h3 { margin: 0; text-wrap: balance; font-weight: 650; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
+.skip { position: absolute; left: -9999px; top: 12px; z-index: 50; background: var(--fg); color: var(--bg); padding: 8px 14px; border-radius: 8px; }
 .skip:focus { left: max(16px, env(safe-area-inset-left, 0px)); }
 
 .wrap {
-  max-width: calc(var(--max) + 2 * 32px);
-  margin-inline: auto;
+  max-width: calc(var(--max) + 48px); margin-inline: auto;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
-@media (min-width: 700px) { .wrap { padding-left: max(32px, env(safe-area-inset-left, 0px)); padding-right: max(32px, env(safe-area-inset-right, 0px)); } }
-
-.eyebrow {
-  font: 600 var(--s-0)/1.3 var(--f-body);
-  text-transform: uppercase; letter-spacing: .12em; color: var(--accent);
-  display: flex; align-items: center; gap: .6em;
+@media (min-width: 720px) {
+  .wrap { padding-left: max(24px, env(safe-area-inset-left, 0px)); padding-right: max(24px, env(safe-area-inset-right, 0px)); }
 }
-.eyebrow .lane-no {
-  font-family: var(--f-mono); letter-spacing: 0; color: var(--ink-3);
-  border: 1px solid var(--rule); border-radius: 999px; padding: .05em .55em;
-}
-.lede { font-size: clamp(1.0625rem, 1rem + .4vw, 1.25rem); color: var(--ink-2); max-width: 62ch; }
-.muted { color: var(--ink-2); }
 
 /* Buttons */
 .btn {
-  display: inline-flex; align-items: center; gap: .55em;
-  font: 600 var(--s-1)/1 var(--f-body);
-  padding: .9em 1.25em; border-radius: 999px; text-decoration: none;
-  border: 1px solid transparent; transition: transform .15s ease, background-color .15s ease;
-  min-height: 44px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 44px; padding: 0 18px; border-radius: 999px;
+  font: 550 15px/1 var(--f-sans); letter-spacing: -.005em; text-decoration: none; white-space: nowrap;
+  border: 1px solid transparent; transition: background-color .15s, border-color .15s, transform .15s;
 }
-.btn-primary { background: var(--accent); color: var(--accent-ink); }
+.btn svg { width: 17px; height: 17px; flex: none; }
+.btn-primary { background: var(--fg); color: var(--bg); }
 .btn-primary:hover { transform: translateY(-1px); }
-.btn-ghost { color: var(--ink); border-color: var(--rule); background: var(--surface); }
-.btn-ghost:hover { border-color: var(--ink-3); }
-.btn svg { width: 18px; height: 18px; flex: none; }
-@media (prefers-reduced-motion: reduce) { .btn { transition: none; } .btn-primary:hover { transform: none; } }
+.btn-ghost { background: var(--btn-2); border-color: var(--line-2); color: var(--fg); }
+.btn-ghost:hover { background: var(--btn-2-hover); }
+.btn-sm { height: 34px; padding: 0 14px; font-size: 14px; }
 
-/* Header */
-.site-head { border-bottom: 1px solid var(--rule); }
-.site-head .wrap { display: flex; align-items: center; gap: 24px; padding-block: 14px; }
-.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); font: 800 1.25rem/1 var(--f-display); letter-spacing: -.02em; }
-.brand img { width: 34px; height: 34px; }
-.nav { display: flex; gap: 22px; margin-left: auto; }
-.nav a { color: var(--ink-2); text-decoration: none; font-size: var(--s-1); font-weight: 500; }
-.nav a:hover { color: var(--ink); }
-.site-head .btn { padding: .65em 1em; }
-@media (max-width: 860px) { .nav { display: none; } .site-head .btn { margin-left: auto; } }
+/* Nav */
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--bg); }
+.nav {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  background: var(--nav-bg); backdrop-filter: saturate(160%) blur(14px); -webkit-backdrop-filter: saturate(160%) blur(14px);
+  border-bottom: 1px solid transparent; transition: border-color .2s;
+}
+.nav.scrolled { border-bottom-color: var(--line); }
+.nav .wrap { display: flex; align-items: center; gap: 28px; height: 60px; }
+.brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; font-weight: 650; font-size: 17px; letter-spacing: -.02em; }
+.brand svg { width: 26px; height: 26px; }
+.mark-a { fill: var(--fg); } .mark-b { fill: var(--accent); }
+.nav-links { display: flex; gap: 26px; margin-left: auto; }
+.nav-links a { text-decoration: none; color: var(--fg-2); font-size: 14px; font-weight: 500; transition: color .15s; }
+.nav-links a:hover { color: var(--fg); }
+@media (max-width: 640px) { .nav-links { display: none; } .nav .btn { margin-left: auto; } }
 
 /* Hero */
-.hero { padding-block: clamp(40px, 7vw, 88px) 0; position: relative; }
-.hero-grid { display: grid; gap: 28px; }
-.hero h1 { font-size: var(--s-5); font-weight: 800; letter-spacing: -.035em; line-height: .98; }
-.hero h1 .hand { color: var(--accent); display: block; }
-.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-.hero-meta { font-size: var(--s-0); color: var(--ink-3); display: flex; flex-wrap: wrap; gap: 6px 16px; }
-.hero-meta span { display: inline-flex; align-items: center; gap: 6px; }
-.hero-meta span::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-@media (min-width: 980px) {
-  .hero-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: end; column-gap: 56px; }
-  .hero-grid .lede { grid-column: 2; grid-row: 1; }
-  .hero-grid h1 { grid-column: 1; grid-row: 1 / span 2; }
-  .hero-grid .hero-side { grid-column: 2; }
+.hero { position: relative; padding-top: clamp(48px, 8vw, 96px); text-align: center; isolation: isolate; }
+.hero::before {
+  content: ""; position: absolute; inset: 0 0 auto; height: 900px; z-index: -1; pointer-events: none;
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 56px 56px; background-position: center top;
+  -webkit-mask-image: radial-gradient(ellipse 60% 55% at 50% 30%, #000 20%, transparent 75%);
+          mask-image: radial-gradient(ellipse 60% 55% at 50% 30%, #000 20%, transparent 75%);
 }
-.hero-side { display: grid; gap: 20px; }
-
-/* Lanes strip under the hero copy: subject detail, the two accounts as lanes */
-.lanes { margin-top: clamp(36px, 5vw, 56px); display: grid; gap: 0; border-top: 1px solid var(--rule); }
-.lane { display: grid; grid-template-columns: 2.2rem minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); font-size: var(--s-0); }
-.lane .n { font: 700 1rem/1 var(--f-mono); color: var(--ink-3); }
-.lane .who { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; min-width: 0; }
-.lane .who b { font-family: var(--f-display); font-size: var(--s-1); }
-.lane .who code { background: none; padding: 0; color: var(--ink-2); }
-.lane .tag { font-family: var(--f-mono); color: var(--ink-3); white-space: nowrap; }
-.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
-.dot.l1 { background: var(--lane-1); } .dot.l2 { background: var(--lane-2); }
-@media (max-width: 520px) { .lane .tag { display: none; } .lane { grid-template-columns: 1.6rem minmax(0,1fr); } }
-
-/* Window frame for screenshots */
-.shot { margin: 0; }
-.frame {
-  border-radius: var(--radius); overflow: hidden; background: #fbfaf8;
-  border: 1px solid var(--rule); box-shadow: var(--shadow);
+.pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 12px 5px 10px; border: 1px solid var(--line-2); border-radius: 999px;
+  font-size: 13px; font-weight: 500; color: var(--fg-2); background: var(--btn-2);
 }
-.frame-bar { height: 30px; display: flex; align-items: center; gap: 7px; padding-inline: 12px; background: var(--sunk); border-bottom: 1px solid var(--rule); }
-.frame-bar i { width: 11px; height: 11px; border-radius: 50%; background: var(--rule); display: block; }
-.frame-bar span { margin-left: 8px; font-size: 12px; color: var(--ink-3); font-weight: 600; }
-.shot figcaption { margin-top: 12px; font-size: var(--s-0); color: var(--ink-3); max-width: 70ch; }
-.hero-shot { margin-top: clamp(32px, 5vw, 56px); }
+.pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.hero h1 {
+  margin: 28px auto 0; max-width: 15ch;
+  font-size: clamp(42px, 7.4vw, 88px); line-height: 1.02; letter-spacing: -.045em; font-weight: 680;
+}
+.hero h1 span { color: var(--fg-3); white-space: nowrap; }
+.hero .sub { margin: 22px auto 0; max-width: 50ch; font-size: clamp(17px, 1.6vw, 19px); color: var(--fg-2); }
+.cta-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 34px; }
+.cta-note { margin-top: 14px; font-size: 13px; color: var(--fg-3); font-variant-numeric: tabular-nums; }
+.cta-note a { color: var(--fg-2); text-underline-offset: 3px; text-decoration-color: var(--line-2); }
+.cta-note a:hover { color: var(--fg); text-decoration-color: currentColor; }
+
+/* Hero visual: a slice of the macOS menu bar with Baton's popover hanging from it */
+.desk { position: relative; margin: clamp(48px, 6vw, 72px) auto 0; max-width: 980px; }
+.desk::before {
+  content: ""; position: absolute; left: 50%; top: 42%; width: min(780px, 100%); aspect-ratio: 1.3; translate: -50% -50%; z-index: -1;
+  background: radial-gradient(closest-side, var(--accent-glow), transparent 70%); filter: blur(10px);
+  animation: breathe 7s ease-in-out infinite;
+}
+@keyframes breathe { 50% { opacity: .65; scale: .94; } }
+.menubar {
+  display: flex; align-items: center; justify-content: flex-end; gap: 18px;
+  height: 30px; padding: 0 14px; border-radius: 10px 10px 0 0;
+  border: 1px solid var(--line); border-bottom: 0;
+  background: linear-gradient(var(--btn-2), transparent);
+  font: 500 12.5px/1 var(--f-sans); color: var(--fg-2);
+}
+.menubar .mb-icon { display: inline-flex; width: 26px; height: 22px; align-items: center; justify-content: center; border-radius: 5px; color: var(--fg-2); }
+.menubar .mb-icon svg { width: 16px; height: 16px; }
+.menubar .mb-baton { background: var(--btn-2-hover); color: var(--fg); }
+.menubar .mb-time { font-variant-numeric: tabular-nums; }
+.popover-wrap { display: flex; justify-content: flex-end; padding: 8px clamp(0px, 9%, 110px) 0 0; }
+.popover {
+  width: min(400px, 100%); border-radius: 20px; box-shadow: 0 0 0 1px var(--line-2), 0 40px 100px -30px rgba(0,0,0,.75), 0 0 80px -10px var(--accent-glow);
+  background: #141a19;
+}
+.desk-caption {
+  position: absolute; left: 0; bottom: 18%; max-width: 330px; text-align: left;
+  display: grid; gap: 14px;
+}
+.desk-caption .row { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; font-size: 15px; color: var(--fg-2); }
+.desk-caption .row b { color: var(--fg); font-weight: 600; }
+.desk-caption .k { font: 500 11.5px/1 var(--f-mono); color: var(--fg-2); border: 1px solid var(--line-2); border-radius: 5px; padding: 4px 0; text-align: center; margin-top: 2px; }
+@media (min-width: 821px) { .desk::before { left: 74%; width: 640px; } }
+@media (max-width: 820px) {
+  .desk-caption { display: none; }
+  .popover-wrap { justify-content: center; padding-right: 0; }
+  .menubar { justify-content: center; }
+}
 
 /* Sections */
-.section { padding-block: clamp(64px, 9vw, 120px); }
-.section + .section { border-top: 1px solid var(--rule); }
-.section-head { display: grid; gap: 14px; margin-bottom: clamp(28px, 4vw, 48px); max-width: 760px; }
+section { padding-block: clamp(88px, 12vw, 152px); }
+.kicker { font: 500 13px/1 var(--f-mono); color: var(--accent); letter-spacing: .02em; }
+.h2 { font-size: clamp(32px, 4.6vw, 54px); line-height: 1.05; letter-spacing: -.038em; }
+.lead { font-size: clamp(17px, 1.5vw, 19px); color: var(--fg-2); max-width: 46ch; }
+.center { text-align: center; }
+.center .lead { margin-inline: auto; }
+.stack { display: grid; gap: 18px; }
 
-/* Problem / fix diagrams */
-.compare { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 900px) { .compare { grid-template-columns: 1fr 1fr; gap: 28px; } }
-.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); padding: 22px 22px 18px; display: grid; gap: 14px; min-width: 0; }
-.panel.fix { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.panel-head h3 { font-size: 1.15rem; }
-.badge { font: 600 11px/1 var(--f-body); letter-spacing: .1em; text-transform: uppercase; padding: 6px 9px; border-radius: 999px; background: var(--sunk); color: var(--ink-2); }
-.panel.fix .badge { background: var(--accent-soft); color: var(--accent); }
-.panel svg { width: 100%; height: auto; display: block; }
-.panel ul { margin: 0; padding-left: 1.1em; color: var(--ink-2); font-size: var(--s-1); display: grid; gap: 4px; }
-@media (max-width: 520px) { .panel { padding: 16px 12px 14px; } .panel-head, .panel ul { padding-inline: 6px; } }
-
-/* SVG diagram styles, all from tokens */
-.dg text { font-family: var(--f-body); fill: var(--ink); }
-.dg .t-s { font-size: 11px; fill: var(--ink-3); }
-.dg .t-m { font-family: var(--f-mono); font-size: 10.5px; fill: var(--ink-2); }
-.dg .t-b { font-size: 13px; font-weight: 700; }
-.dg .box { fill: var(--bg); stroke: var(--rule); stroke-width: 1; }
-.dg .box-hi { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
-.dg .box-off { fill: none; stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 4 4; }
-.dg .row { fill: var(--surface); stroke: var(--rule); }
-.dg .l1 { stroke: var(--lane-1); } .dg .l2 { stroke: var(--lane-2); }
-.dg .f1 { fill: var(--lane-1); } .dg .f2 { fill: var(--lane-2); }
-.dg .wire { fill: none; stroke-width: 2.5; stroke-linecap: round; }
-.dg .wire-off { fill: none; stroke: var(--ink-3); stroke-width: 1.5; stroke-dasharray: 3 5; }
-.dg .flow { stroke: var(--surface); stroke-width: 1.4; stroke-dasharray: 1 13; animation: flow 1.4s linear infinite; }
-.dg .bar { fill: var(--rule); }
-.dg .bar-hi { fill: var(--accent); opacity: .55; }
-.dg .x { stroke: var(--dont); stroke-width: 2; stroke-linecap: round; }
-@keyframes flow { to { stroke-dashoffset: -24; } }
-@media (prefers-reduced-motion: reduce) { .dg .flow { display: none; } }
-
-/* Steps */
-.steps { display: grid; gap: clamp(56px, 8vw, 96px); counter-reset: step; list-style: none; margin: 0; padding: 0; }
-.step { display: grid; gap: 24px; align-items: center; }
-@media (min-width: 960px) {
-  .step { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; }
-  .step:nth-child(even) .step-text { order: 2; }
+/* Film */
+.film { padding-top: clamp(96px, 12vw, 152px); }
+.film-frame {
+  position: relative; margin-top: 48px; border-radius: 16px; overflow: hidden;
+  box-shadow: var(--shot-shadow); background: #0b0f0e; aspect-ratio: 16 / 9; max-width: 100%;
 }
-.step-text { display: grid; gap: 14px; min-width: 0; }
-.step-no { font: 800 clamp(3rem, 2rem + 4vw, 5rem)/.9 var(--f-display); color: var(--accent); letter-spacing: -.04em; }
-.step-text p { color: var(--ink-2); max-width: 52ch; }
-.step-text ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: var(--s-1); color: var(--ink-2); }
-.step-text li { padding-left: 1.3em; position: relative; }
-.step-text li::before { content: ""; position: absolute; left: 0; top: .62em; width: .7em; height: 2px; background: var(--accent); }
-
-/* Also-included grid */
-.also { margin-top: clamp(56px, 8vw, 96px); display: grid; gap: 0; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); border-top: 2px solid var(--ink); }
-.also > div { padding: 18px 20px 20px 0; display: grid; gap: 6px; align-content: start; border-bottom: 1px solid var(--rule); }
-.also h3 { font-size: 1.05rem; }
-.also p { font-size: var(--s-1); color: var(--ink-2); }
-
-/* Safety */
-.relay { list-style: none; margin: 0 0 clamp(36px, 5vw, 56px); padding: 0; display: flex; flex-wrap: wrap; gap: 8px; counter-reset: leg; }
-.relay li {
-  counter-increment: leg; display: inline-flex; align-items: center; gap: 8px;
-  padding: 8px 14px 8px 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--rule);
-  font-size: var(--s-1); font-weight: 600;
+.film-frame video { width: 100%; height: 100%; object-fit: cover; }
+.film-ctl {
+  position: absolute; right: 16px; bottom: 16px; display: flex; gap: 8px;
 }
-.relay li::before {
-  content: counter(leg); font: 700 12px/1 var(--f-mono); width: 24px; height: 24px; border-radius: 50%;
-  display: grid; place-items: center; background: var(--accent-soft); color: var(--accent);
+.film-ctl button {
+  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.18); background: rgba(10,14,13,.6); color: #eef3f2;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  font: 550 13.5px/1 var(--f-sans); cursor: pointer;
 }
-.relay li.end { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.relay li.end::before { background: var(--accent-ink); color: var(--accent); }
-.safety-grid { display: grid; gap: 32px; align-items: start; }
-@media (min-width: 960px) { .safety-grid { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 56px; } }
-.promises { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
-.promises li { padding: 16px 0; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; }
-.promises li:first-child { border-top: 1px solid var(--rule); }
-.promises svg { width: 22px; height: 22px; color: var(--accent); margin-top: 2px; }
-.promises b { display: block; font-family: var(--f-display); font-size: 1.05rem; }
-.promises span { color: var(--ink-2); font-size: var(--s-1); }
+.film-ctl button:hover { background: rgba(10,14,13,.8); }
+.film-ctl svg { width: 15px; height: 15px; }
+
+/* Features */
+.features { display: grid; gap: clamp(96px, 13vw, 168px); }
+.feature { display: grid; gap: 40px; align-items: center; }
+.feature .copy { display: grid; gap: 16px; min-width: 0; }
+.feature h2 { font-size: clamp(30px, 3.6vw, 44px); line-height: 1.06; letter-spacing: -.035em; }
+.feature .desc { color: var(--fg-2); font-size: 17px; max-width: 40ch; }
+.shot { border-radius: 12px; box-shadow: var(--shot-shadow); background: #1b1b1b; width: 100%; }
+.feature .media { position: relative; min-width: 0; }
+.media-glow::before {
+  content: ""; position: absolute; inset: 10% 5%; z-index: -1; border-radius: 50%;
+  background: radial-gradient(closest-side, var(--accent-glow), transparent); filter: blur(30px);
+}
+.feature .media { isolation: isolate; }
+.undo-card {
+  position: absolute; right: -4%; bottom: -14%; width: 62%;
+  border-radius: 10px; box-shadow: var(--shot-shadow), 0 0 0 1px var(--accent-glow);
+}
+.steps { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font: 500 13px/1 var(--f-mono); color: var(--fg-3); }
+.steps span { color: var(--fg-2); border: 1px solid var(--line-2); border-radius: 999px; padding: 6px 10px; }
+@media (min-width: 900px) {
+  .feature { grid-template-columns: 4fr 7fr; gap: 64px; }
+  .feature.flip { grid-template-columns: 7fr 4fr; }
+  .feature.flip .copy { order: 2; }
+}
+@media (max-width: 899px) { .undo-card { right: 0; bottom: -10%; } .feature-3 .media { margin-bottom: 32px; } }
+
+/* Trust strip */
+.trust { padding-block: 0; }
+.trust ul {
+  list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr);
+  border-block: 1px solid var(--line);
+}
+.trust li { display: flex; gap: 12px; align-items: center; padding: 26px 18px; font-size: 14.5px; font-weight: 500; color: var(--fg); }
+.trust li + li { border-left: 1px solid var(--line); }
+.trust svg { width: 20px; height: 20px; flex: none; color: var(--accent); }
+@media (max-width: 900px) {
+  .trust ul { grid-template-columns: 1fr 1fr; }
+  .trust li:nth-child(3) { border-left: 0; }
+  .trust li:nth-child(n+3) { border-top: 1px solid var(--line); }
+}
+@media (max-width: 480px) {
+  .trust ul { grid-template-columns: 1fr; }
+  .trust li + li { border-left: 0; border-top: 1px solid var(--line); }
+  .trust li { padding: 18px 4px; }
+}
 
 /* Fair use */
-.fair { display: grid; gap: 20px; }
-@media (min-width: 860px) { .fair { grid-template-columns: 1fr 1fr; } }
-.fair-col { border-radius: var(--radius); padding: 24px; display: grid; gap: 14px; align-content: start; background: var(--surface); border: 1px solid var(--rule); }
-.fair-col h3 { display: flex; align-items: center; gap: 10px; }
-.fair-col h3 .mark { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex: none; }
-.fair-col.do h3 .mark { background: var(--accent-soft); color: var(--do); }
-.fair-col.dont h3 .mark { background: var(--dont-soft); color: var(--dont); }
-.fair-col .mark svg { width: 16px; height: 16px; }
-.fair-col ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
-.fair-col li { padding-left: 18px; position: relative; color: var(--ink-2); }
-.fair-col li b { color: var(--ink); }
-.fair-col li::before { content: ""; position: absolute; left: 0; top: .6em; width: 8px; height: 8px; border-radius: 2px; }
-.fair-col.do li::before { background: var(--do); }
-.fair-col.dont li::before { background: var(--dont); }
-.terms { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: var(--s-1); }
-.note { margin-top: 18px; font-size: var(--s-1); color: var(--ink-2); max-width: 75ch; }
+.fair-grid { display: grid; gap: 1px; margin-top: 56px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+@media (min-width: 760px) { .fair-grid { grid-template-columns: 1fr 1fr; } }
+.fair-col { background: var(--bg); padding: clamp(24px, 3.4vw, 40px); display: grid; gap: 22px; align-content: start; }
+.fair-col h3 { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-3); }
+.fair-col ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+.fair-col li { display: grid; grid-template-columns: 20px 1fr; gap: 12px; font-size: 16px; line-height: 1.5; color: var(--fg); }
+.fair-col li svg { width: 18px; height: 18px; margin-top: 3px; }
+.do svg { color: var(--accent); }
+.dont svg { color: var(--no); }
+.fair-links { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 28px; font-size: 14px; color: var(--fg-3); }
+.fair-links a { color: var(--fg-2); text-underline-offset: 3px; text-decoration-color: var(--line-2); }
+.fair-links a:hover { color: var(--fg); text-decoration-color: currentColor; }
 
-/* FAQ */
-.faq { display: grid; border-top: 2px solid var(--ink); max-width: 880px; }
-.faq details { border-bottom: 1px solid var(--rule); }
-.faq summary {
-  cursor: pointer; list-style: none; padding: 20px 40px 20px 0; position: relative;
-  font: 700 var(--s-3)/1.25 var(--f-display); letter-spacing: -.01em;
+/* Final CTA */
+.final { position: relative; isolation: isolate; text-align: center; }
+.final::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: min(700px, 100%); aspect-ratio: 2; translate: -50% -50%; z-index: -1;
+  background: radial-gradient(closest-side, var(--accent-glow), transparent); filter: blur(20px);
 }
-.faq summary::-webkit-details-marker { display: none; }
-.faq summary::after {
-  content: ""; position: absolute; right: 6px; top: 50%; width: 12px; height: 12px; margin-top: -9px;
-  border-right: 2.5px solid var(--accent); border-bottom: 2.5px solid var(--accent); transform: rotate(45deg); transition: transform .2s ease;
-}
-.faq details[open] summary::after { transform: rotate(-135deg); margin-top: -3px; }
-@media (prefers-reduced-motion: reduce) { .faq summary::after { transition: none; } }
-.faq .a { padding: 0 0 22px; display: grid; gap: 10px; color: var(--ink-2); max-width: 70ch; }
-
-/* Download */
-.get { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 900px) { .get { grid-template-columns: 1fr 1fr; gap: 28px; } }
-.card { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); padding: 26px; display: grid; gap: 14px; align-content: start; min-width: 0; grid-template-columns: minmax(0, 1fr); }
-.card.primary { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.card .fine { font-size: var(--s-0); color: var(--ink-3); }
-.card ol { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; color: var(--ink-2); font-size: var(--s-1); }
-.code { position: relative; background: var(--sunk); border-radius: 10px; border: 1px solid var(--rule); }
-.code pre { margin: 0; padding: 16px 16px 16px; overflow-x: auto; font: 13px/1.7 var(--f-mono); color: var(--ink); }
-.code pre .c { color: var(--ink-3); }
-.copy { position: absolute; top: 8px; right: 8px; font: 600 12px/1 var(--f-body); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink-2); cursor: pointer; min-height: 32px; }
-.copy:hover { color: var(--ink); }
+.final .big-mark { width: 64px; height: 64px; margin: 0 auto 28px; }
+.final .h2 { max-width: 16ch; margin-inline: auto; }
 
 /* Footer */
-.site-foot { border-top: 1px solid var(--rule); padding-block: 40px 56px; font-size: var(--s-1); color: var(--ink-2); }
-.site-foot .wrap { display: grid; gap: 18px; }
-.foot-row { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: center; }
-.foot-row a { color: var(--ink-2); }
-.disclaimer { font-size: var(--s-0); color: var(--ink-3); max-width: 80ch; }
-.sponsor { display: inline-flex; align-items: center; gap: 6px; }
-.sponsor svg { width: 14px; height: 14px; color: #db61a2; flex: none; }
-.sponsor-note { font-size: var(--s-0); color: var(--ink-3); margin-top: 22px; }
+footer { border-top: 1px solid var(--line); padding-block: 40px 48px; font-size: 14px; color: var(--fg-3); }
+footer .wrap { display: grid; gap: 24px; }
+.foot-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; }
+.foot-links { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.foot-links a { text-decoration: none; color: var(--fg-2); }
+.foot-links a:hover { color: var(--fg); }
+.foot-fine { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; }
+
+/* Motion: content is visible at rest; JS only fades in what starts below the fold */
+.js .reveal.pending { opacity: 0; transform: translateY(18px); }
+.reveal { transition: opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1); }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .desk::before { animation: none; }
+  .reveal, .btn { transition: none; }
+  .js .reveal.pending { opacity: 1; transform: none; }
+  .btn-primary:hover { transform: none; }
+}
 </style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
-<header class="site-head">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-apple" viewBox="0 0 24 24"><path fill="currentColor" d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.87-.76-1.47.02-2.83.86-3.59 2.18-1.53 2.66-.39 6.6 1.1 8.75.73 1.06 1.6 2.24 2.73 2.2 1.1-.05 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13.84-1.22 1.18-2.41 1.2-2.47-.03-.01-2.3-.88-2.32-3.5zM14.2 6.13c.6-.73 1.01-1.75.9-2.76-.87.04-1.92.58-2.54 1.31-.56.64-1.05 1.67-.92 2.66.97.08 1.96-.49 2.56-1.21z"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5l3.5 3.5 7.5-8"/></symbol>
+  <symbol id="i-x" viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M5.5 5.5l9 9m0-9l-9 9"/></symbol>
+  <symbol id="i-mark" viewBox="0 0 100 100"><rect class="mark-a" x="6" y="30" width="56" height="14" rx="7"/><rect class="mark-b" x="38" y="56" width="56" height="14" rx="7"/></symbol>
+</svg>
+
+<header class="nav" id="nav">
   <div class="wrap">
-    <a class="brand" href="#top" aria-label="Baton home">
-      <img src="assets/icon.svg" alt="" width="34" height="34">
-      Baton
-    </a>
-    <nav class="nav" aria-label="Sections">
-      <a href="#why">Why</a>
-      <a href="#how">How it works</a>
-      <a href="#safety">Safety</a>
+    <a class="brand" href="/" aria-label="Baton home"><svg aria-hidden="true"><use href="#i-mark"/></svg>Baton</a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#features">Features</a>
       <a href="#fair-use">Fair use</a>
-      <a href="#faq">FAQ</a>
-      <a data-link="source" href="#download">Source</a>
+      <a href="https://github.com/vamsijanaki/baton">GitHub</a>
     </nav>
-    <a class="btn btn-primary" data-link="download" href="#download">Download</a>
+    <a class="btn btn-primary btn-sm" href="/download">Download</a>
   </div>
 </header>
 
 <main id="main">
-  <!-- HERO -->
-  <section class="hero" id="top">
+  <div class="hero">
     <div class="wrap">
-      <div class="hero-grid">
-        <h1>Your Claude accounts. <span class="hand">One history.</span></h1>
-        <p class="lede">Baton is a free Mac app for one person with more than one Claude account of their own, say personal and work. Pick up the same project, with the same conversation history, from whichever of your accounts fits the work, in Claude Code in Terminal or in the Claude desktop app.</p>
-        <div class="hero-side">
-          <div class="hero-actions">
-            <a class="btn btn-primary" data-link="download" href="#download">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
-              Download for Mac
-            </a>
-            <a class="btn btn-ghost" data-link="source" href="#download">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5"/><path d="m16 7 5 5-5 5"/></svg>
-              View the source
-            </a>
-          </div>
-          <p class="hero-meta">
-            <span>Free, MIT licence</span>
-            <span>Apple silicon, macOS</span>
-            <span>No servers, no telemetry</span>
-          </p>
+      <span class="pill"><i></i>Free &amp; open source · macOS</span>
+      <h1>Your Claude Code accounts. <span>One history.</span></h1>
+      <p class="sub">Baton lives in your menu bar and lets you continue any project, with its whole history, as whichever of your own accounts fits the work.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="/download"><svg aria-hidden="true"><use href="#i-apple"/></svg>Download for Mac</a>
+        <a class="btn btn-ghost" href="https://github.com/vamsijanaki/baton"><svg aria-hidden="true"><use href="#i-github"/></svg>Star on GitHub</a>
+      </div>
+      <p class="cta-note">v1.0.0 · Apple silicon · <a href="/changelog">Changelog</a></p>
+
+      <div class="desk">
+        <div class="menubar" aria-hidden="true">
+          <span class="mb-icon"><svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.3" d="M2 8.5c1.6-1.7 3.7-2.6 6-2.6s4.4.9 6 2.6M4.3 10.8c1-1 2.3-1.5 3.7-1.5s2.7.5 3.7 1.5M8 13.2h.01"/></svg></span>
+          <span class="mb-icon mb-baton"><svg viewBox="0 0 100 100"><rect x="6" y="30" width="56" height="14" rx="7" fill="currentColor"/><rect x="38" y="56" width="56" height="14" rx="7" fill="currentColor" opacity=".55"/></svg></span>
+          <span class="mb-time">Sat 25 Oct&nbsp; 9:02</span>
+        </div>
+        <div class="desk-caption">
+          <div class="row"><span class="k">⌘1</span><span><b>Personal</b> picks up yesterday's session in Terminal.</span></div>
+          <div class="row"><span class="k">⌘2</span><span><b>Work</b> sees the same project history, in its own desktop app.</span></div>
+          <div class="row"><span class="k">⌘↩</span><span>Continue as the account that fits.</span></div>
+        </div>
+        <div class="popover-wrap">
+          <img class="popover" src="/assets/screens/popover.webp" width="720" height="1092"
+               alt="Baton's menu-bar popover for the project acme-web: a Personal and a Work account, each with 5-hour and weekly usage and buttons to continue in Terminal or open its desktop app." fetchpriority="high">
         </div>
       </div>
-
-      <div class="lanes" aria-label="Example: two accounts, one Mac">
-        <div class="lane"><span class="n">1</span><span class="who"><b><span class="dot l1"></span>Personal</b><span>alex@example.com</span><code>~/.claude</code></span><span class="tag">Terminal + Claude</span></div>
-        <div class="lane"><span class="n">2</span><span class="who"><b><span class="dot l2"></span>Work</b><span>alex@company.example</span><code>~/.claude-work</code></span><span class="tag">Terminal + Claude Work</span></div>
-      </div>
-
-      <figure class="shot hero-shot">
-        <div class="frame">
-          <div class="frame-bar" aria-hidden="true"><i></i><i></i><i></i><span>Baton</span></div>
-          <img src="assets/screens/01-accounts.png" width="1180" height="1020"
-               alt="Baton's Accounts screen. Two accounts, Personal and Work, each with a Terminal row showing its config folder, a desktop app row, and usage badges for the 5-hour and weekly limits.">
-        </div>
-        <figcaption>The Accounts screen: each of your accounts with its Terminal folder, its own desktop app and its current usage. Example data from a test Mac.</figcaption>
-      </figure>
     </div>
-  </section>
+  </div>
 
-  <!-- WHY -->
-  <section class="section" id="why">
+  <section class="film" aria-labelledby="film-h">
     <div class="wrap">
-      <div class="section-head">
-        <p class="eyebrow">The problem</p>
-        <h2>Two accounts means two separate histories.</h2>
-        <p class="lede">Claude Code keeps each account's chats in that account's own folder. Start a project as Personal and, signed in as Work, it isn't there. The desktop app holds one sign-in at a time, so switching means signing out and back in.</p>
+      <div class="center stack reveal">
+        <p class="kicker">37 seconds</p>
+        <h2 class="h2" id="film-h">See it hand off.</h2>
       </div>
-
-      <div class="compare">
-        <div class="panel">
-          <div class="panel-head"><h3>Without Baton</h3><span class="badge">Today</span></div>
-          <svg class="dg" viewBox="0 0 360 330" role="img" aria-labelledby="dg1t dg1d">
-            <title id="dg1t">Without Baton</title>
-            <desc id="dg1d">Personal and Work each write to their own history. The acme-web chats exist only under Personal; Work's copy is empty. One desktop app, signed in as one account.</desc>
-            <!-- accounts -->
-            <rect class="box" x="8" y="8" width="160" height="54" rx="10"/>
-            <circle class="f1" cx="26" cy="29" r="5"/>
-            <text class="t-b" x="38" y="33">Personal</text>
-            <text class="t-m" x="22" y="51">~/.claude</text>
-            <rect class="box" x="192" y="8" width="160" height="54" rx="10"/>
-            <circle class="f2" cx="210" cy="29" r="5"/>
-            <text class="t-b" x="222" y="33">Work</text>
-            <text class="t-m" x="206" y="51">~/.claude-work</text>
-            <!-- wires -->
-            <path class="wire l1" d="M88 62 V112"/>
-            <path class="wire l2" d="M272 62 V112"/>
-            <!-- histories -->
-            <rect class="box" x="8" y="112" width="160" height="116" rx="10"/>
-            <text class="t-s" x="20" y="132">acme-web history</text>
-            <rect class="row" x="18" y="142" width="140" height="22" rx="5"/><rect class="bar" x="26" y="151" width="96" height="4" rx="2"/>
-            <rect class="row" x="18" y="169" width="140" height="22" rx="5"/><rect class="bar" x="26" y="178" width="78" height="4" rx="2"/>
-            <rect class="row" x="18" y="196" width="140" height="22" rx="5"/><rect class="bar" x="26" y="205" width="110" height="4" rx="2"/>
-            <rect class="box-off" x="192" y="112" width="160" height="116" rx="10"/>
-            <text class="t-s" x="204" y="132">acme-web history</text>
-            <text class="t-b" x="272" y="178" text-anchor="middle" style="fill:var(--ink-3)">No chats</text>
-            <text class="t-s" x="272" y="196" text-anchor="middle">starts from zero</text>
-            <!-- desktop app -->
-            <rect class="box" x="8" y="262" width="344" height="58" rx="10"/>
-            <text class="t-b" x="22" y="285">Claude desktop app</text>
-            <text class="t-s" x="22" y="304">One sign-in: Personal. Work has to sign out and in.</text>
-            <path class="wire-off" d="M88 228 V262"/>
-            <path class="wire-off" d="M272 228 V262"/>
-            <path class="x" d="M263 239 l18 14 M281 239 l-18 14"/>
-          </svg>
-          <ul>
-            <li>The same project, two disconnected histories.</li>
-            <li>Continue as the other account and Claude has no context.</li>
-            <li>One desktop app, one account at a time.</li>
-          </ul>
-        </div>
-
-        <div class="panel fix">
-          <div class="panel-head"><h3>With Baton</h3><span class="badge">One history</span></div>
-          <svg class="dg" viewBox="0 0 360 330" role="img" aria-labelledby="dg2t dg2d">
-            <title id="dg2t">With Baton</title>
-            <desc id="dg2d">Personal and Work both connect to one shared acme-web history. Each account has its own desktop app, and both show the same chats.</desc>
-            <rect class="box" x="8" y="8" width="160" height="54" rx="10"/>
-            <circle class="f1" cx="26" cy="29" r="5"/>
-            <text class="t-b" x="38" y="33">Personal</text>
-            <text class="t-m" x="22" y="51">~/.claude</text>
-            <rect class="box" x="192" y="8" width="160" height="54" rx="10"/>
-            <circle class="f2" cx="210" cy="29" r="5"/>
-            <text class="t-b" x="222" y="33">Work</text>
-            <text class="t-m" x="206" y="51">~/.claude-work</text>
-            <!-- converging wires -->
-            <path class="wire l1" d="M88 62 C88 90, 150 88, 150 112"/>
-            <path class="wire l2" d="M272 62 C272 90, 210 88, 210 112"/>
-            <path class="wire l1 flow" d="M88 62 C88 90, 150 88, 150 112"/>
-            <path class="wire l2 flow" d="M272 62 C272 90, 210 88, 210 112"/>
-            <!-- shared history -->
-            <rect class="box-hi" x="58" y="112" width="244" height="116" rx="10"/>
-            <text class="t-b" x="70" y="132">acme-web history</text>
-            <text class="t-s" x="290" y="132" text-anchor="end">shared</text>
-            <rect class="row" x="68" y="142" width="224" height="22" rx="5"/><text x="78" y="157" style="font-size:10.5px">Fix the search filter on the orders page</text>
-            <rect class="row" x="68" y="169" width="224" height="22" rx="5"/><text x="78" y="184" style="font-size:10.5px">Add dark mode to the settings screen</text>
-            <rect class="row" x="68" y="196" width="224" height="22" rx="5"/><rect class="bar-hi" x="78" y="205" width="150" height="4" rx="2"/>
-            <!-- desktop apps -->
-            <path class="wire l1" d="M120 228 V262"/>
-            <path class="wire l2" d="M240 228 V262"/>
-            <rect class="box" x="8" y="262" width="166" height="58" rx="10"/>
-            <circle class="f1" cx="24" cy="281" r="4"/>
-            <text class="t-b" x="34" y="285">Claude</text>
-            <text class="t-s" x="20" y="304">signed in as Personal</text>
-            <rect class="box" x="186" y="262" width="166" height="58" rx="10"/>
-            <circle class="f2" cx="202" cy="281" r="4"/>
-            <text class="t-b" x="212" y="285">Claude Work</text>
-            <text class="t-s" x="198" y="304">signed in as Work</text>
-          </svg>
-          <ul>
-            <li>One history per project, continued from either account.</li>
-            <li>You choose, per project, which accounts may continue it.</li>
-            <li>A desktop app per account, open side by side.</li>
-          </ul>
+      <div class="film-frame reveal">
+        <video id="film" muted playsinline loop preload="none" poster="/assets/video/poster.webp" width="1920" height="1080"
+               aria-label="Baton launch film: one project history continued across a Personal and a Work account.">
+          <source src="/assets/video/baton.mp4" type="video/mp4">
+        </video>
+        <div class="film-ctl">
+          <button type="button" id="film-sound"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M7.5 2.5 4 5.5H1.5v5H4l3.5 3z"/><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M10.5 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6.3 6.3 0 0 1 0 9"/></svg><span>Play with sound</span></button>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- HOW -->
-  <section class="section" id="how">
-    <div class="wrap">
-      <div class="section-head">
-        <p class="eyebrow">How it works</p>
-        <h2>Three steps, each shown before it happens.</h2>
+  <section id="features" aria-label="Features" style="padding-top:0">
+    <div class="wrap features">
+      <div class="feature reveal">
+        <div class="copy">
+          <p class="kicker">Sessions</p>
+          <h2>One history. Every account.</h2>
+          <p class="desc">Start a project as Personal, continue it as Work. Same chats, same context, in Terminal or the Claude desktop app.</p>
+        </div>
+        <div class="media media-glow">
+          <img class="shot" src="/assets/screens/history.webp" width="2000" height="1288" loading="lazy" decoding="async"
+               alt="The Sessions screen: Personal's usage limits, a Continue in Terminal button running claude --continue, and the acme-web sessions list.">
+        </div>
       </div>
 
-      <ol class="steps">
-        <li class="step">
-          <div class="step-text">
-            <span class="step-no" aria-hidden="true">1</span>
-            <h3>Add your accounts and sign in once each.</h3>
-            <p>Your existing <code>~/.claude</code> becomes account 1 and is only ever read. Each extra account gets its own folder, like <code>~/.claude-work</code>, and you sign in with Claude Code's own <code>claude auth login</code>.</p>
-            <ul>
-              <li>Each extra account also gets its own copy of the Claude desktop app, with a tinted icon, so several accounts can be open side by side.</li>
-              <li>Each desktop app needs one sign-in the first time. Baton never copies sign-ins.</li>
-            </ul>
-          </div>
-          <figure class="shot">
-            <div class="frame">
-              <div class="frame-bar" aria-hidden="true"><i></i><i></i><i></i><span>Welcome to Baton</span></div>
-              <img src="assets/screens/09-intro-desktop-app.png" width="1180" height="760" loading="lazy"
-                   alt="Baton's welcome guide, step 2 of 4: The desktop app. It explains that each account gets its own Claude desktop app and needs one sign-in the first time.">
-            </div>
-          </figure>
-        </li>
+      <div class="feature flip reveal">
+        <div class="copy">
+          <p class="kicker">Shared projects</p>
+          <h2>You choose who sees what.</h2>
+          <p class="desc">Nothing is shared by default. Switch an account on per project, and its other projects stay private.</p>
+        </div>
+        <div class="media media-glow">
+          <img class="shot" src="/assets/screens/share.webp" width="2000" height="1288" loading="lazy" decoding="async"
+               alt="The Share acme-web dialog: Personal always holds the history; a switch lets Work continue this project.">
+        </div>
+      </div>
 
-        <li class="step">
-          <div class="step-text">
-            <span class="step-no" aria-hidden="true">2</span>
-            <h3>Choose who can continue each project.</h3>
-            <p>Nothing is shared by default. Open a project, switch on the accounts that may continue it, and review the exact file operations before anything changes.</p>
-            <ul>
-              <li>Turning an account off hides that project's chats from its desktop apps. They move into a backup, never deleted.</li>
-              <li>Turning it back on restores them.</li>
-              <li>Sign-ins, settings and prompt history always stay per account.</li>
-            </ul>
-          </div>
-          <figure class="shot">
-            <div class="frame">
-              <div class="frame-bar" aria-hidden="true"><i></i><i></i><i></i><span>Shared projects</span></div>
-              <img src="assets/screens/05-share-modal.png" width="1180" height="760" loading="lazy"
-                   alt="The Share acme-web dialog. Personal always has access because it holds the history. A switch lets Work continue the project, with a note that turning it off hides 6 chats into a backup.">
-            </div>
-          </figure>
-        </li>
-
-        <li class="step">
-          <div class="step-text">
-            <span class="step-no" aria-hidden="true">3</span>
-            <h3>Continue as the account that fits the work.</h3>
-            <p>Pick a project and an account, then press <kbd>⌘↩</kbd>. Baton opens Terminal with <code>claude --continue</code> as that account, or opens that account's desktop app, with the project's full history.</p>
-            <ul>
-              <li>Browse a project's sessions by title, time, size and git branch, and resume any one.</li>
-              <li>If another account is still working in the same project, Baton tells you first.</li>
-            </ul>
-          </div>
-          <figure class="shot">
-            <div class="frame">
-              <div class="frame-bar" aria-hidden="true"><i></i><i></i><i></i><span>Sessions</span></div>
-              <img src="assets/screens/08-sessions.png" width="1180" height="760" loading="lazy"
-                   alt="The Sessions screen for project acme-web as Personal: usage limits at 18 percent for the 5-hour session and 62 percent weekly, a Continue in Terminal button, and a list of the project's sessions.">
-            </div>
-          </figure>
-        </li>
-      </ol>
-
-      <div class="also" aria-label="Also included">
-        <div><h3>Usage you can trust</h3><p>Each account's 5-hour and weekly usage, read from Claude Code's own <code>/usage</code>. No model call, zero tokens. Optional warning at a level you set.</p></div>
-        <div><h3>Tidy duplicate apps</h3><p>Two desktop apps signed in as the same email? Accounts offers to merge them and keeps every chat.</p></div>
-        <div><h3>Doctor</h3><p>Checks links, sync, app copies, disk space, interrupted operations and snapshot integrity.</p></div>
-        <div><h3>Keyboard first</h3><p><kbd>⌘↩</kbd> continue, <kbd>⌘F</kbd> search, <kbd>⌘1</kbd>…<kbd>9</kbd> account, <kbd>⌘P</kbd> project.</p></div>
+      <div class="feature feature-3 reveal">
+        <div class="copy">
+          <p class="kicker">History &amp; restore</p>
+          <h2>Nothing is ever lost.</h2>
+          <p class="desc">Every change is previewed file by file, backed up to a verified snapshot, and one click from undone.</p>
+          <div class="steps" aria-label="Order of every change"><span>Preview</span>→<span>Verified backup</span>→<span>Undo</span></div>
+        </div>
+        <div class="media media-glow">
+          <img class="shot" src="/assets/screens/preview.webp" width="2000" height="1525" loading="lazy" decoding="async"
+               alt="A dry-run preview listing the exact file operation, with a note that every touched path is snapshotted and verified first.">
+          <img class="undo-card" src="/assets/screens/undo.webp" width="1200" height="403" loading="lazy" decoding="async"
+               alt="History and restore: a completed operation with an Undo this button.">
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- SAFETY -->
-  <section class="section" id="safety">
+  <section class="trust" aria-label="Privacy and safety">
     <div class="wrap">
-      <div class="section-head">
-        <p class="eyebrow">Safety</p>
-        <h2>Every change is previewed, backed up and undoable.</h2>
-        <p class="lede">Baton touches the folders where your chats live, so every write goes through one engine, in this order. If any step fails, or your Mac stops halfway, the operation rolls back.</p>
-      </div>
-
-      <ol class="relay" aria-label="The order of every change">
-        <li>Plan</li>
-        <li>Dry-run preview</li>
-        <li>You confirm</li>
-        <li>Check running apps</li>
-        <li>Snapshot</li>
-        <li>Verify snapshot</li>
-        <li>Journal</li>
-        <li>Apply step by step</li>
-        <li>Verify</li>
-        <li class="end">Undo any time</li>
-      </ol>
-
-      <div class="safety-grid">
-        <figure class="shot">
-          <div class="frame">
-            <div class="frame-bar" aria-hidden="true"><i></i><i></i><i></i><span>Review changes</span></div>
-            <img src="assets/screens/07-share-preview.png" width="1180" height="760" loading="lazy"
-                 alt="A change preview listing a dry run of 21 file operations, each with its full path, and a note that every touched path is snapshotted and verified before anything changes.">
-          </div>
-          <figcaption>The preview lists every file operation, with full paths, before you press Apply.</figcaption>
-        </figure>
-
-        <ul class="promises">
-          <li>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h18v13H3z"/><path d="M8 7V4h8v3"/><path d="M9 13h6"/></svg>
-            <div><b>Nothing is ever deleted</b><span>Removed items are unlinked, moved into a verified snapshot or the hidden-chats backup, or moved to the macOS Trash. Transcripts are never overwritten.</span></div>
-          </li>
-          <li>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-            <div><b>Never reads your login tokens</b><span>It reads only the email and account id from <code>.claude.json</code>, to label each account. Sign-ins stay in your Keychain.</span></div>
-          </li>
-          <li>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8"/><path d="m9 9 6 4M15 9l-6 4"/></svg>
-            <div><b>Never modifies Claude</b><span>A hard guard refuses any write to <code>~/.claude</code>, to <code>/Applications/Claude.app</code>, or to an app's data beyond its Code-tab chat list.</span></div>
-          </li>
-          <li>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l16 16"/><path d="M8.5 5.6A9 9 0 0 1 21 12a9 9 0 0 1-2 3"/><path d="M5.5 8.6A9 9 0 0 0 12 21a9 9 0 0 0 3.4-.7"/></svg>
-            <div><b>No servers, no telemetry</b><span>Everything stays on your Mac. Diagnostics exports are redacted: no tokens, no chat content, emails masked.</span></div>
-          </li>
-          <li>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
-            <div><b>One-click undo</b><span>Every operation is in History with an Undo, which is itself previewed and snapshotted. A Dry run switch logs every command and runs none.</span></div>
-          </li>
-        </ul>
-      </div>
+      <ul class="reveal">
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="9" width="12" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 9V6.5a3 3 0 0 1 6 0V9" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>Never reads your login tokens</li>
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5 3.5 5v4.5c0 4 2.8 6.9 6.5 8 3.7-1.1 6.5-4 6.5-8V5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>Never modifies Claude</li>
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 17h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>No servers, no telemetry</li>
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 6-4 4 4 4m6-8 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Open source, MIT</li>
+      </ul>
     </div>
   </section>
 
-  <!-- FAIR USE -->
-  <section class="section" id="fair-use">
+  <section id="fair-use" aria-labelledby="fair-h">
     <div class="wrap">
-      <div class="section-head">
-        <p class="eyebrow">Fair use</p>
-        <h2>For one person and their own accounts.</h2>
-        <p class="lede">Baton organises your own work across accounts you already have. It doesn't change what any account is entitled to, and it is not a way to get more usage.</p>
+      <div class="center stack reveal">
+        <p class="kicker">Fair use</p>
+        <h2 class="h2" id="fair-h">For one person and their own accounts.</h2>
+        <p class="lead">Baton organises work across accounts you already have. It doesn't change what any plan allows, and it isn't a way to get more usage.</p>
       </div>
-
-      <div class="fair">
+      <div class="fair-grid reveal">
         <div class="fair-col do">
-          <h3><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></span>Do</h3>
+          <h3>Do</h3>
           <ul>
-            <li><b>Use it with your own accounts</b>, on your own Mac.</li>
-            <li><b>Use the right account for the right work.</b> Company code on the work account, side projects on your personal one.</li>
-            <li><b>Follow your employer's policy</b> on which accounts and tools you may use for their work.</li>
-            <li><b>Follow the terms</b> of each plan you use.</li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Use it with your own accounts, on your own Mac.</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Use the right account for the right work: company code on work, side projects on personal.</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Follow your employer's policy on which accounts and tools you may use.</span></li>
           </ul>
         </div>
         <div class="fair-col dont">
-          <h3><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span>Don't</h3>
+          <h3>Don't</h3>
           <ul>
-            <li><b>Don't share an account</b> with other people, or use someone else's.</li>
-            <li><b>Don't buy several personal plans</b> to rotate between them past usage limits.</li>
-            <li><b>Don't continue with another account</b> after one has been suspended or banned.</li>
-            <li><b>Don't resell access</b> or run Baton as a service for others.</li>
+            <li><svg aria-hidden="true"><use href="#i-x"/></svg><span>Share an account with other people, or use someone else's.</span></li>
+            <li><svg aria-hidden="true"><use href="#i-x"/></svg><span>Rotate several personal plans to get around usage limits.</span></li>
+            <li><svg aria-hidden="true"><use href="#i-x"/></svg><span>Continue with another account after one is suspended or banned.</span></li>
+            <li><svg aria-hidden="true"><use href="#i-x"/></svg><span>Resell access or run Baton as a service for others.</span></li>
           </ul>
         </div>
       </div>
-
-      <div class="terms">
-        <a href="https://www.anthropic.com/legal/aup" rel="noopener">Usage Policy</a>
-        <a href="https://www.anthropic.com/legal/consumer-terms" rel="noopener">Consumer Terms of Service</a>
-        <a href="https://code.claude.com/docs/en/legal-and-compliance" rel="noopener">Claude Code legal and compliance</a>
-      </div>
-      <p class="note">These terms apply to your accounts whether or not you use Baton. If you are unsure whether your use is allowed, read them, or ask your employer for a work account.</p>
+      <p class="fair-links">
+        <a href="https://www.anthropic.com/legal/aup">Usage Policy</a>
+        <a href="https://www.anthropic.com/legal/consumer-terms">Consumer Terms</a>
+        <a href="https://code.claude.com/docs/en/legal-and-compliance">Claude Code legal and compliance</a>
+      </p>
     </div>
   </section>
 
-  <!-- FAQ -->
-  <section class="section" id="faq">
-    <div class="wrap">
-      <div class="section-head">
-        <p class="eyebrow">FAQ</p>
-        <h2>Questions people ask first.</h2>
+  <section class="final" aria-labelledby="final-h">
+    <div class="wrap reveal">
+      <svg class="big-mark" aria-hidden="true"><use href="#i-mark"/></svg>
+      <h2 class="h2" id="final-h">Pick up right where you left off.</h2>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="/download"><svg aria-hidden="true"><use href="#i-apple"/></svg>Download for Mac</a>
+        <a class="btn btn-ghost" href="https://github.com/vamsijanaki/baton"><svg aria-hidden="true"><use href="#i-github"/></svg>View on GitHub</a>
       </div>
-      <div class="faq">
-        <details open>
-          <summary>Is it allowed?</summary>
-          <div class="a">
-            <p>Baton is for one person using their own accounts on their own Mac, for example keeping personal and work use separate while still continuing your own project's history. It signs in only through Claude Code's and the Claude app's own sign-in flows and never shares or copies sign-ins.</p>
-            <p>Don't use it to share an account, and follow the terms of the plans you use. See <a href="#fair-use">Fair use</a>.</p>
-          </div>
-        </details>
-        <details>
-          <summary>Does it read my tokens?</summary>
-          <div class="a">
-            <p>No. Baton never reads, copies or stores credentials. It reads only the email and account id from an account's <code>.claude.json</code> to show which account is which. At start-up it clears any inherited <code>CLAUDE_*</code> and <code>ANTHROPIC_*</code> variables from its own environment, so each <code>claude</code> it opens uses exactly the account you picked.</p>
-          </div>
-        </details>
-        <details>
-          <summary>Will I lose chats?</summary>
-          <div class="a">
-            <p>No. Transcripts in <code>~/.claude/projects</code> are never deleted or overwritten, and account 1 always sees everything. Turning an account off for a project moves that project's desktop chat-list entries into a backup; turning it on restores them. Every change has a verified snapshot and an Undo.</p>
-            <p>One thing to avoid: two accounts writing to the same project at the same time. Baton warns you when another account is still running there.</p>
-          </div>
-        </details>
-        <details>
-          <summary>macOS says it can't open Baton.</summary>
-          <div class="a">
-            <p>Baton is ad-hoc signed but not yet notarized by Apple, so Gatekeeper blocks the first launch. Right-click <b>Baton.app</b>, choose <b>Open</b>, then <b>Open</b> again. On newer macOS versions that don't offer this, try to open it once, then go to <b>System Settings › Privacy &amp; Security</b> and click <b>Open Anyway</b>. You only do this once. Or build it from source.</p>
-          </div>
-        </details>
-        <details>
-          <summary>Does it run on Intel Macs?</summary>
-          <div class="a">
-            <p>The download is an Apple silicon (arm64) build only for now. An Intel build may work from source with <code>electron-builder --mac --x64</code>, but it is untested. Windows and Linux are not supported.</p>
-          </div>
-        </details>
-        <details>
-          <summary>Does it upload anything?</summary>
-          <div class="a"><p>No. Baton has no server and no telemetry. The source is public, so you can check.</p></div>
-        </details>
-      </div>
-    </div>
-  </section>
-
-  <!-- DOWNLOAD -->
-  <section class="section" id="download">
-    <div class="wrap">
-      <div class="section-head">
-        <p class="eyebrow">Get Baton</p>
-        <h2>Free and open source, under the MIT licence.</h2>
-      </div>
-      <div class="get">
-        <div class="card primary">
-          <h3>Download</h3>
-          <p class="muted">For macOS on Apple silicon.</p>
-          <ol>
-            <li>Download <code>Baton-<span data-version>1.0.0</span>-arm64.dmg</code> from the latest release.</li>
-            <li>Open it and drag <b>Baton</b> to Applications.</li>
-            <li>First launch: right-click Baton, choose <b>Open</b>, then <b>Open</b>.</li>
-          </ol>
-          <div><a class="btn btn-primary" data-link="download" href="#download">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
-            Download the latest release
-          </a></div>
-          <p class="fine">Opening Terminal for an account the first time asks for permission to control Terminal. That is how Baton opens a window as the account you chose.</p>
-        </div>
-        <div class="card">
-          <h3>Build from source</h3>
-          <p class="muted">Needs Apple silicon, Node.js 22 or later, and the Xcode Command Line Tools.</p>
-          <div class="code">
-            <button class="copy" type="button" id="copy-build" data-copy="build-cmds">Copy</button>
-<pre id="build-cmds"><code>git clone <span data-clone>https://github.com/vamsijanaki/baton</span>.git
-cd baton
-npm ci
-npm test       <span class="c"># sandboxed, uses a fake HOME</span>
-npm run dist   <span class="c"># → release/Baton-*-arm64.dmg</span></code></pre>
-          </div>
-          <p><a data-link="source" href="#download">Read the source on GitHub</a></p>
-        </div>
-      </div>
-      <p class="sponsor-note">Baton is free. If it helps you, <a class="sponsor" data-link="sponsor" href="https://github.com/sponsors/vamsijanaki"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 4.3 2.5h2c.7-1.4 2.2-2.5 4.3-2.5 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg>sponsor it on GitHub</a>; it pays for Apple notarization and ongoing maintenance.</p>
+      <p class="cta-note">Free forever. If it saves you time, <a href="https://github.com/sponsors/vamsijanaki">sponsor the project</a>.</p>
     </div>
   </section>
 </main>
 
-<footer class="site-foot">
+<footer>
   <div class="wrap">
-    <div class="foot-row">
-      <a class="brand" href="#top"><img src="assets/icon.svg" alt="" width="28" height="28">Baton</a>
-      <a data-link="source" href="#download">Source</a>
-      <a data-link="download" href="#download">Releases</a>
-      <a class="sponsor" data-link="sponsor" href="https://github.com/sponsors/vamsijanaki"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 4.3 2.5h2c.7-1.4 2.2-2.5 4.3-2.5 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg>Sponsor</a>
-      <span>MIT licence © 2026 Vamsi Janaki</span>
+    <div class="foot-top">
+      <a class="brand" href="/" aria-label="Baton home"><svg aria-hidden="true"><use href="#i-mark"/></svg>Baton</a>
+      <nav class="foot-links" aria-label="Footer">
+        <a href="/download">Download</a>
+        <a href="https://github.com/vamsijanaki/baton">GitHub</a>
+        <a href="https://github.com/sponsors/vamsijanaki">Sponsor</a>
+        <a href="https://github.com/vamsijanaki/baton/blob/main/FAIR-USE.md">Fair use</a>
+      </nav>
     </div>
-    <p class="disclaimer">Not affiliated with or endorsed by Anthropic. Claude is a trademark of Anthropic. Baton is an independent open-source project; Claude and Claude Code are named only to describe what it works with.</p>
+    <div class="foot-fine">
+      <p>Not affiliated with or endorsed by Anthropic. Claude is a trademark of Anthropic.</p>
+      <p>MIT © 2026 Vamsi Janaki</p>
+    </div>
   </div>
 </footer>
 
 <script>
 (function () {
-  var cfg = window.BATON || {};
-  document.querySelectorAll("[data-link]").forEach(function (a) {
-    var url = cfg[a.getAttribute("data-link")];
-    if (url) { a.href = url; a.rel = "noopener"; }
-  });
-  if (cfg.version) document.querySelectorAll("[data-version]").forEach(function (el) { el.textContent = cfg.version; });
-  if (cfg.source) document.querySelectorAll("[data-clone]").forEach(function (el) { el.textContent = cfg.source.replace(/\/$/, ""); });
+  var d = document.documentElement;
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var nav = document.getElementById('nav');
+  var onScroll = function () { nav.classList.toggle('scrolled', window.scrollY > 8); };
+  window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
 
-  document.querySelectorAll("[data-copy]").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var el = document.getElementById(btn.getAttribute("data-copy"));
-      var text = el.innerText.split("\n").map(function (l) { return l.replace(/\s+#.*$/, "").trimEnd(); }).join("\n").trim();
-      function done(msg) { btn.textContent = msg; setTimeout(function () { btn.textContent = "Copy"; }, 1600); }
-      function fallback() {
-        var r = document.createRange(); r.selectNodeContents(el);
-        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
-        done("Press ⌘C");
-      }
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function () { done("Copied"); }, fallback);
-      } else { fallback(); }
+  if ('IntersectionObserver' in window && !reduce) {
+    d.classList.add('js');
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.remove('pending'); io.unobserve(e.target); } });
+    }, { rootMargin: '0px 0px -8% 0px' });
+    document.querySelectorAll('.reveal').forEach(function (el) {
+      if (el.getBoundingClientRect().top > window.innerHeight) { el.classList.add('pending'); io.observe(el); }
     });
+  }
+
+  var v = document.getElementById('film');
+  var btn = document.getElementById('film-sound');
+  var label = btn.querySelector('span');
+  var userStarted = false;
+  if ('IntersectionObserver' in window && !reduce) {
+    new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (e.isIntersecting) { if (v.paused && (!userStarted || !v.muted)) v.play().catch(function () {}); }
+        else if (!v.paused) v.pause();
+      });
+    }, { threshold: .4 }).observe(v);
+  }
+  btn.addEventListener('click', function () {
+    userStarted = true;
+    if (v.muted || v.paused) {
+      v.muted = false; v.loop = false; v.controls = true;
+      if (!v.paused && v.currentTime > 1) v.currentTime = 0;
+      v.play().catch(function () {});
+      btn.parentNode.hidden = true;
+    }
   });
+  v.addEventListener('ended', function () { v.controls = false; v.muted = true; v.loop = true; btn.parentNode.hidden = false; label.textContent = 'Play again with sound'; if (!reduce) v.play().catch(function () {}); });
 })();
 </script>
 </body>
