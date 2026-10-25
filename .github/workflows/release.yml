@@ -1,0 +1,182 @@
+# Release: build the Mac app for a version tag and publish it as a GitHub Release.
+#
+# Trigger: pushing a tag vX.Y.Z (made by `npm run release`, see RELEASING.md), or run manually
+# (Actions → Release → Run workflow) with an EXISTING tag to rebuild/re-upload it.
+#
+# Assets uploaded to the release:
+#   Baton-arm64.dmg               stable name — https://github.com/vamsijanaki/baton/releases/latest/download/Baton-arm64.dmg
+#   Baton-X.Y.Z-arm64.dmg         versioned copy of the same DMG
+#   Baton-X.Y.Z-arm64-mac.zip     zipped .app (for a future auto-updater)
+#   SHA256SUMS.txt                `shasum -a 256 -c SHA256SUMS.txt` to verify
+# Release notes = the "## [X.Y.Z]" section of CHANGELOG.md.
+#
+# Signing / notarization (NOT active yet — builds are ad-hoc signed, as in package.json `mac.identity: "-"`).
+# When an Apple Developer ID is available, add these repository secrets and the "signed" path below switches on:
+#   CSC_LINK                      base64 of the Developer ID Application .p12 (or an https URL to it)
+#   CSC_KEY_PASSWORD              password of that .p12
+#   APPLE_ID                      Apple ID email used for notarization
+#   APPLE_APP_SPECIFIC_PASSWORD   app-specific password for that Apple ID (appleid.apple.com)
+#   APPLE_TEAM_ID                 10-character team id
+# With only CSC_LINK + CSC_KEY_PASSWORD the app is Developer-ID signed (hardened runtime) but not notarized;
+# with all five it is also notarized. Without them the build is ad-hoc exactly like `npm run dist` locally.
+# The signed path has never run — verify the first signed release by hand (spctl -a -vv Baton.app).
+#
+# The website (site/) is NOT deployed from here; deploy it manually with `npx wrangler deploy` (see RELEASING.md).
+
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and publish, e.g. v1.0.1'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-latest # Apple silicon (arm64)
+    timeout-minutes: 45
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+      - name: Check tag matches package.json
+        id: ver
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag '$TAG' is not vX.Y.Z"; exit 1
+          fi
+          VERSION="${TAG#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$PKG" != "$VERSION" ]; then
+            echo "::error::Tag $TAG does not match package.json version $PKG"; exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          awk -v v="$VERSION" '
+            index($0, "## [" v "]") == 1 { f = 1; next }
+            f && /^## \[/ { exit }
+            f && /^\[[^]]+\]: / { exit }
+            f { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md"; then
+            echo "::error::CHANGELOG.md has no '## [$VERSION]' section (or it is empty)"; exit 1
+          fi
+          cat >> "$RUNNER_TEMP/notes.md" <<EOF
+
+          ---
+
+          **Download:** \`Baton-arm64.dmg\` (Apple silicon). First launch: right-click Baton.app → Open → Open — the build is not notarized yet.
+          Verify with \`shasum -a 256 -c SHA256SUMS.txt\`.
+          EOF
+          cat "$RUNNER_TEMP/notes.md"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Detect signing secrets
+        id: signing
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$CSC_LINK" ]; then echo "sign=true" >> "$GITHUB_OUTPUT"; else echo "sign=false" >> "$GITHUB_OUTPUT"; fi
+          if [ -n "$CSC_LINK" ] && [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            echo "notarize=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "notarize=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Default path today: ad-hoc signed, not notarized (same as a local `npm run dist`).
+      - name: Build (ad-hoc signed)
+        if: steps.signing.outputs.sign != 'true'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run dist
+
+      # Future path: Developer ID signing (+ notarization when the Apple secrets exist).
+      # Edits package.json in the CI checkout only: drops the ad-hoc identity so electron-builder uses CSC_LINK,
+      # turns on the hardened runtime, and enables notarization (electron-builder reads APPLE_* from env).
+      - name: Build (Developer ID signed)
+        if: steps.signing.outputs.sign == 'true'
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARIZE: ${{ steps.signing.outputs.notarize }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const p = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            delete p.build.mac.identity;
+            p.build.mac.hardenedRuntime = true;
+            p.build.mac.notarize = process.env.NOTARIZE === "true";
+            fs.writeFileSync("package.json", JSON.stringify(p, null, 2) + "\n");
+          '
+          npm run dist
+
+      - name: Collect assets + checksums
+        id: assets
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          cd release
+          test -f Baton-arm64.dmg || { echo "::error::release/Baton-arm64.dmg not built"; ls -la; exit 1; }
+          ZIP="Baton-${VERSION}-arm64-mac.zip"
+          test -f "$ZIP" || { echo "::error::release/$ZIP not built"; ls -la; exit 1; }
+          cp Baton-arm64.dmg "Baton-${VERSION}-arm64.dmg"
+          shasum -a 256 Baton-arm64.dmg "Baton-${VERSION}-arm64.dmg" "$ZIP" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          ls -la
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          FILES=(
+            "release/Baton-arm64.dmg"
+            "release/Baton-${VERSION}-arm64.dmg"
+            "release/Baton-${VERSION}-arm64-mac.zip"
+            "release/SHA256SUMS.txt"
+          )
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists — updating notes and replacing assets."
+            gh release edit "$TAG" --title "Baton $VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+            gh release upload "$TAG" "${FILES[@]}" --clobber
+          else
+            gh release create "$TAG" "${FILES[@]}" \
+              --title "Baton $VERSION" \
+              --notes-file "$RUNNER_TEMP/notes.md" \
+              --verify-tag \
+              --latest
+          fi
+          echo "Published: https://github.com/$GH_REPO/releases/tag/$TAG"

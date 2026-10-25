@@ -116,7 +116,7 @@ And also:
 
 ### Download
 
-1. Download `Baton-<version>-arm64.dmg` from the [latest release](https://github.com/vamsijanaki/baton/releases/latest).
+1. Download [`Baton-arm64.dmg`](https://github.com/vamsijanaki/baton/releases/latest/download/Baton-arm64.dmg) from the [latest release](https://github.com/vamsijanaki/baton/releases/latest) (checksums in `SHA256SUMS.txt`).
 2. Open it and drag **Baton** to Applications.
 3. First launch: **right-click Baton.app → Open → Open**.
 
@@ -134,7 +134,7 @@ git clone https://github.com/vamsijanaki/baton.git
 cd baton
 npm ci
 npm test              # sandboxed tests against a fake HOME — your real files are never touched
-npm run dist          # → release/Baton-<version>-arm64.dmg and release/mac-arm64/Baton.app
+npm run dist          # → release/Baton-arm64.dmg, release/Baton-<version>-arm64-mac.zip and release/mac-arm64/Baton.app
 npm run install:local # optional: ad-hoc sign and copy Baton.app to ~/Applications
 ```
 

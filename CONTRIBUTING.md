@@ -27,3 +27,9 @@ Requirements: macOS (Apple silicon), Node.js 22+, Xcode Command Line Tools.
 1. Fork, branch from `main`, keep the change focused.
 2. `npm test` and `npm run typecheck` must pass (CI runs both on macOS).
 3. Describe what changes on disk, and how it is previewed and undone.
+4. Add a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for every user-visible change (Added / Changed / Fixed / Security / Removed).
+5. No AI co-author trailers or "Generated with" lines in commits or PRs.
+
+## Releases
+
+Versioning, the safety gate, and how a release is cut and published are in [RELEASING.md](RELEASING.md).
