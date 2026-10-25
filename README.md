@@ -11,7 +11,7 @@ say a personal one and a work one. Continue any project, with its whole history,
 
 <p>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-0d7f72"></a>
-  <img alt="macOS 14+ · Apple silicon" src="https://img.shields.io/badge/macOS-14%2B%20%C2%B7%20Apple%20silicon-111111?logo=apple">
+  <img alt="macOS · Apple silicon" src="https://img.shields.io/badge/macOS-Apple%20silicon-111111?logo=apple">
   <a href="https://github.com/vamsijanaki/baton/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/vamsijanaki/baton?color=0d7f72"></a>
   <a href="https://github.com/vamsijanaki/baton/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/vamsijanaki/baton/actions/workflows/ci.yml/badge.svg?branch=main"></a>
 </p>
