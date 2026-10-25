@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="80" viewBox="0 0 300 80" aria-label="Baton">
+  <g transform="translate(4 8) scale(.64)">
+    <rect x="6" y="30" width="56" height="14" rx="7" fill="currentColor"/>
+    <rect x="38" y="56" width="56" height="14" rx="7" fill="#0D7F72"/>
+  </g>
+  <text x="82" y="57" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="50" font-weight="600" letter-spacing="-2" fill="currentColor">baton</text>
+</svg>

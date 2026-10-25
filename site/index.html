@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Baton for Mac</title>
+<meta name="description" content="Baton is a free, open-source Mac app for one person with several Claude accounts of their own. Continue the same project, with the same conversation history, from any of your accounts.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+<link rel="apple-touch-icon" href="assets/icon-256.png">
+<meta property="og:title" content="Baton for Mac">
+<meta property="og:description" content="Your Claude accounts, one history. Free and open source.">
+<meta property="og:image" content="assets/screens/01-accounts.png">
+
+<!-- ============ SITE CONFIG: the only place links are set ============ -->
+<script>
+  window.BATON = {
+    download: "https://github.com/vamsijanaki/baton/releases/latest",
+    source:   "https://github.com/vamsijanaki/baton",
+    version:  "1.0.0"
+  };
+</script>
+<!-- =================================================================== -->
+
+<style>
+/* Layout: a relay track. Accounts run in numbered lanes; every section hands the
+   reader on to the next leg. Wide editorial column, real screenshots in plain
+   window frames, one moving diagram. */
+:root {
+  --bg: #f2f5f4;
+  --surface: #ffffff;
+  --sunk: #e6ecea;
+  --ink: #12201d;
+  --ink-2: #4a5b57;
+  --ink-3: #6c7b78;
+  --rule: #d3dcd9;
+  --accent: #0d7f72;
+  --accent-ink: #ffffff;
+  --accent-soft: #d6ece8;
+  --lane-1: #3f7566;   /* Personal dot in the app */
+  --lane-2: #93799a;   /* Work dot in the app */
+  --do: #0d7f72;
+  --dont: #a2433a;
+  --dont-soft: #f4e3e0;
+  --shadow: 0 1px 2px rgba(18, 32, 29, .06), 0 18px 40px -18px rgba(18, 32, 29, .28);
+
+  --f-display: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --f-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --s-0: .8125rem;  /* 13 */
+  --s-1: .9375rem;  /* 15 */
+  --s-2: 1.0625rem; /* 17 */
+  --s-3: 1.375rem;  /* 22 */
+  --s-4: clamp(1.75rem, 1.2rem + 2vw, 2.5rem);
+  --s-5: clamp(2.6rem, 1.4rem + 5.4vw, 5.6rem);
+
+  --radius: 14px;
+  --max: 1160px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1513; --surface: #15201d; --sunk: #1b2925; --ink: #e6efec; --ink-2: #a9bbb6; --ink-3: #87998f;
+    --rule: #2a3a36; --accent: #3cc2b0; --accent-ink: #062521; --accent-soft: #163a35;
+    --lane-1: #6fb8a1; --lane-2: #c3a3cb; --do: #3cc2b0; --dont: #e88b80; --dont-soft: #3a211e;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 22px 50px -20px rgba(0,0,0,.7);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1513; --surface: #15201d; --sunk: #1b2925; --ink: #e6efec; --ink-2: #a9bbb6; --ink-3: #87998f;
+  --rule: #2a3a36; --accent: #3cc2b0; --accent-ink: #062521; --accent-soft: #163a35;
+  --lane-1: #6fb8a1; --lane-2: #c3a3cb; --do: #3cc2b0; --dont: #e88b80; --dont-soft: #3a211e;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 22px 50px -20px rgba(0,0,0,.7);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 var(--s-2)/1.6 var(--f-body);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  overflow-x: hidden;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: var(--accent); text-underline-offset: .18em; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+code, kbd { font-family: var(--f-mono); font-size: .88em; }
+:not(pre) > code { background: var(--sunk); padding: .08em .35em; border-radius: 5px; overflow-wrap: anywhere; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -.02em; line-height: 1.08; }
+h2 { font-size: var(--s-4); font-weight: 800; }
+h3 { font-size: var(--s-3); font-weight: 700; letter-spacing: -.01em; }
+p { margin: 0; }
+
+.skip { position: absolute; left: -999px; top: 8px; background: var(--surface); color: var(--ink); padding: 8px 12px; border-radius: 8px; z-index: 20; }
+.skip:focus { left: max(16px, env(safe-area-inset-left, 0px)); }
+
+.wrap {
+  max-width: calc(var(--max) + 2 * 32px);
+  margin-inline: auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+@media (min-width: 700px) { .wrap { padding-left: max(32px, env(safe-area-inset-left, 0px)); padding-right: max(32px, env(safe-area-inset-right, 0px)); } }
+
+.eyebrow {
+  font: 600 var(--s-0)/1.3 var(--f-body);
+  text-transform: uppercase; letter-spacing: .12em; color: var(--accent);
+  display: flex; align-items: center; gap: .6em;
+}
+.eyebrow .lane-no {
+  font-family: var(--f-mono); letter-spacing: 0; color: var(--ink-3);
+  border: 1px solid var(--rule); border-radius: 999px; padding: .05em .55em;
+}
+.lede { font-size: clamp(1.0625rem, 1rem + .4vw, 1.25rem); color: var(--ink-2); max-width: 62ch; }
+.muted { color: var(--ink-2); }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: .55em;
+  font: 600 var(--s-1)/1 var(--f-body);
+  padding: .9em 1.25em; border-radius: 999px; text-decoration: none;
+  border: 1px solid transparent; transition: transform .15s ease, background-color .15s ease;
+  min-height: 44px;
+}
+.btn-primary { background: var(--accent); color: var(--accent-ink); }
+.btn-primary:hover { transform: translateY(-1px); }
+.btn-ghost { color: var(--ink); border-color: var(--rule); background: var(--surface); }
+.btn-ghost:hover { border-color: var(--ink-3); }
+.btn svg { width: 18px; height: 18px; flex: none; }
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } .btn-primary:hover { transform: none; } }
+
+/* Header */
+.site-head { border-bottom: 1px solid var(--rule); }
+.site-head .wrap { display: flex; align-items: center; gap: 24px; padding-block: 14px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); font: 800 1.25rem/1 var(--f-display); letter-spacing: -.02em; }
+.brand img { width: 34px; height: 34px; }
+.nav { display: flex; gap: 22px; margin-left: auto; }
+.nav a { color: var(--ink-2); text-decoration: none; font-size: var(--s-1); font-weight: 500; }
+.nav a:hover { color: var(--ink); }
+.site-head .btn { padding: .65em 1em; }
+@media (max-width: 860px) { .nav { display: none; } .site-head .btn { margin-left: auto; } }
+
+/* Hero */
+.hero { padding-block: clamp(40px, 7vw, 88px) 0; position: relative; }
+.hero-grid { display: grid; gap: 28px; }
+.hero h1 { font-size: var(--s-5); font-weight: 800; letter-spacing: -.035em; line-height: .98; }
+.hero h1 .hand { color: var(--accent); display: block; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.hero-meta { font-size: var(--s-0); color: var(--ink-3); display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.hero-meta span { display: inline-flex; align-items: center; gap: 6px; }
+.hero-meta span::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+@media (min-width: 980px) {
+  .hero-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: end; column-gap: 56px; }
+  .hero-grid .lede { grid-column: 2; grid-row: 1; }
+  .hero-grid h1 { grid-column: 1; grid-row: 1 / span 2; }
+  .hero-grid .hero-side { grid-column: 2; }
+}
+.hero-side { display: grid; gap: 20px; }
+
+/* Lanes strip under the hero copy: subject detail, the two accounts as lanes */
+.lanes { margin-top: clamp(36px, 5vw, 56px); display: grid; gap: 0; border-top: 1px solid var(--rule); }
+.lane { display: grid; grid-template-columns: 2.2rem minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); font-size: var(--s-0); }
+.lane .n { font: 700 1rem/1 var(--f-mono); color: var(--ink-3); }
+.lane .who { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; min-width: 0; }
+.lane .who b { font-family: var(--f-display); font-size: var(--s-1); }
+.lane .who code { background: none; padding: 0; color: var(--ink-2); }
+.lane .tag { font-family: var(--f-mono); color: var(--ink-3); white-space: nowrap; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.dot.l1 { background: var(--lane-1); } .dot.l2 { background: var(--lane-2); }
+@media (max-width: 520px) { .lane .tag { display: none; } .lane { grid-template-columns: 1.6rem minmax(0,1fr); } }
+
+/* Window frame for screenshots */
+.shot { margin: 0; }
+.frame {
+  border-radius: var(--radius); overflow: hidden; background: #fbfaf8;
+  border: 1px solid var(--rule); box-shadow: var(--shadow);
+}
+.frame-bar { height: 30px; display: flex; align-items: center; gap: 7px; padding-inline: 12px; background: var(--sunk); border-bottom: 1px solid var(--rule); }
+.frame-bar i { width: 11px; height: 11px; border-radius: 50%; background: var(--rule); display: block; }
+.frame-bar span { margin-left: 8px; font-size: 12px; color: var(--ink-3); font-weight: 600; }
+.shot figcaption { margin-top: 12px; font-size: var(--s-0); color: var(--ink-3); max-width: 70ch; }
+.hero-shot { margin-top: clamp(32px, 5vw, 56px); }
+
+/* Sections */
+.section { padding-block: clamp(64px, 9vw, 120px); }
+.section + .section { border-top: 1px solid var(--rule); }
+.section-head { display: grid; gap: 14px; margin-bottom: clamp(28px, 4vw, 48px); max-width: 760px; }
+
+/* Problem / fix diagrams */
+.compare { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .compare { grid-template-columns: 1fr 1fr; gap: 28px; } }
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); padding: 22px 22px 18px; display: grid; gap: 14px; min-width: 0; }
+.panel.fix { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.panel-head h3 { font-size: 1.15rem; }
+.badge { font: 600 11px/1 var(--f-body); letter-spacing: .1em; text-transform: uppercase; padding: 6px 9px; border-radius: 999px; background: var(--sunk); color: var(--ink-2); }
+.panel.fix .badge { background: var(--accent-soft); color: var(--accent); }
+.panel svg { width: 100%; height: auto; display: block; }
+.panel ul { margin: 0; padding-left: 1.1em; color: var(--ink-2); font-size: var(--s-1); display: grid; gap: 4px; }
+@media (max-width: 520px) { .panel { padding: 16px 12px 14px; } .panel-head, .panel ul { padding-inline: 6px; } }
+
+/* SVG diagram styles, all from tokens */
+.dg text { font-family: var(--f-body); fill: var(--ink); }
+.dg .t-s { font-size: 11px; fill: var(--ink-3); }
+.dg .t-m { font-family: var(--f-mono); font-size: 10.5px; fill: var(--ink-2); }
+.dg .t-b { font-size: 13px; font-weight: 700; }
+.dg .box { fill: var(--bg); stroke: var(--rule); stroke-width: 1; }
+.dg .box-hi { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+.dg .box-off { fill: none; stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 4 4; }
+.dg .row { fill: var(--surface); stroke: var(--rule); }
+.dg .l1 { stroke: var(--lane-1); } .dg .l2 { stroke: var(--lane-2); }
+.dg .f1 { fill: var(--lane-1); } .dg .f2 { fill: var(--lane-2); }
+.dg .wire { fill: none; stroke-width: 2.5; stroke-linecap: round; }
+.dg .wire-off { fill: none; stroke: var(--ink-3); stroke-width: 1.5; stroke-dasharray: 3 5; }
+.dg .flow { stroke: var(--surface); stroke-width: 1.4; stroke-dasharray: 1 13; animation: flow 1.4s linear infinite; }
+.dg .bar { fill: var(--rule); }
+.dg .bar-hi { fill: var(--accent); opacity: .55; }
+.dg .x { stroke: var(--dont); stroke-width: 2; stroke-linecap: round; }
+@keyframes flow { to { stroke-dashoffset: -24; } }
+@media (prefers-reduced-motion: reduce) { .dg .flow { display: none; } }
+
+/* Steps */
+.steps { display: grid; gap: clamp(56px, 8vw, 96px); counter-reset: step; list-style: none; margin: 0; padding: 0; }
+.step { display: grid; gap: 24px; align-items: center; }
+@media (min-width: 960px) {
+  .step { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; }
+  .step:nth-child(even) .step-text { order: 2; }
+}
+.step-text { display: grid; gap: 14px; min-width: 0; }
+.step-no { font: 800 clamp(3rem, 2rem + 4vw, 5rem)/.9 var(--f-display); color: var(--accent); letter-spacing: -.04em; }
+.step-text p { color: var(--ink-2); max-width: 52ch; }
+.step-text ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: var(--s-1); color: var(--ink-2); }
+.step-text li { padding-left: 1.3em; position: relative; }
+.step-text li::before { content: ""; position: absolute; left: 0; top: .62em; width: .7em; height: 2px; background: var(--accent); }
+
+/* Also-included grid */
+.also { margin-top: clamp(56px, 8vw, 96px); display: grid; gap: 0; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); border-top: 2px solid var(--ink); }
+.also > div { padding: 18px 20px 20px 0; display: grid; gap: 6px; align-content: start; border-bottom: 1px solid var(--rule); }
+.also h3 { font-size: 1.05rem; }
+.also p { font-size: var(--s-1); color: var(--ink-2); }
+
+/* Safety */
+.relay { list-style: none; margin: 0 0 clamp(36px, 5vw, 56px); padding: 0; display: flex; flex-wrap: wrap; gap: 8px; counter-reset: leg; }
+.relay li {
+  counter-increment: leg; display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px 8px 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--rule);
+  font-size: var(--s-1); font-weight: 600;
+}
+.relay li::before {
+  content: counter(leg); font: 700 12px/1 var(--f-mono); width: 24px; height: 24px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--accent-soft); color: var(--accent);
+}
+.relay li.end { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.relay li.end::before { background: var(--accent-ink); color: var(--accent); }
+.safety-grid { display: grid; gap: 32px; align-items: start; }
+@media (min-width: 960px) { .safety-grid { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 56px; } }
+.promises { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.promises li { padding: 16px 0; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; }
+.promises li:first-child { border-top: 1px solid var(--rule); }
+.promises svg { width: 22px; height: 22px; color: var(--accent); margin-top: 2px; }
+.promises b { display: block; font-family: var(--f-display); font-size: 1.05rem; }
+.promises span { color: var(--ink-2); font-size: var(--s-1); }
+
+/* Fair use */
+.fair { display: grid; gap: 20px; }
+@media (min-width: 860px) { .fair { grid-template-columns: 1fr 1fr; } }
+.fair-col { border-radius: var(--radius); padding: 24px; display: grid; gap: 14px; align-content: start; background: var(--surface); border: 1px solid var(--rule); }
+.fair-col h3 { display: flex; align-items: center; gap: 10px; }
+.fair-col h3 .mark { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+.fair-col.do h3 .mark { background: var(--accent-soft); color: var(--do); }
+.fair-col.dont h3 .mark { background: var(--dont-soft); color: var(--dont); }
+.fair-col .mark svg { width: 16px; height: 16px; }
+.fair-col ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+.fair-col li { padding-left: 18px; position: relative; color: var(--ink-2); }
+.fair-col li b { color: var(--ink); }
+.fair-col li::before { content: ""; position: absolute; left: 0; top: .6em; width: 8px; height: 8px; border-radius: 2px; }
+.fair-col.do li::before { background: var(--do); }
+.fair-col.dont li::before { background: var(--dont); }
+.terms { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: var(--s-1); }
+.note { margin-top: 18px; font-size: var(--s-1); color: var(--ink-2); max-width: 75ch; }
+
+/* FAQ */
+.faq { display: grid; border-top: 2px solid var(--ink); max-width: 880px; }
+.faq details { border-bottom: 1px solid var(--rule); }
+.faq summary {
+  cursor: pointer; list-style: none; padding: 20px 40px 20px 0; position: relative;
+  font: 700 var(--s-3)/1.25 var(--f-display); letter-spacing: -.01em;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after {
+  content: ""; position: absolute; right: 6px; top: 50%; width: 12px; height: 12px; margin-top: -9px;
+  border-right: 2.5px solid var(--accent); border-bottom: 2.5px solid var(--accent); transform: rotate(45deg); transition: transform .2s ease;
+}
+.faq details[open] summary::after { transform: rotate(-135deg); margin-top: -3px; }
+@media (prefers-reduced-motion: reduce) { .faq summary::after { transition: none; } }
+.faq .a { padding: 0 0 22px; display: grid; gap: 10px; color: var(--ink-2); max-width: 70ch; }
+
+/* Download */
+.get { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .get { grid-template-columns: 1fr 1fr; gap: 28px; } }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); padding: 26px; display: grid; gap: 14px; align-content: start; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.card.primary { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.card .fine { font-size: var(--s-0); color: var(--ink-3); }
+.card ol { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; color: var(--ink-2); font-size: var(--s-1); }
+.code { position: relative; background: var(--sunk); border-radius: 10px; border: 1px solid var(--rule); }
+.code pre { margin: 0; padding: 16px 16px 16px; overflow-x: auto; font: 13px/1.7 var(--f-mono); color: var(--ink); }
+.code pre .c { color: var(--ink-3); }
+.copy { position: absolute; top: 8px; right: 8px; font: 600 12px/1 var(--f-body); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink-2); cursor: pointer; min-height: 32px; }
+.copy:hover { color: var(--ink); }
+
+/* Footer */
+.site-foot { border-top: 1px solid var(--rule); padding-block: 40px 56px; font-size: var(--s-1); color: var(--ink-2); }
+.site-foot .wrap { display: grid; gap: 18px; }
+.foot-row { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: center; }
+.foot-row a { color: var(--ink-2); }
+.disclaimer { font-size: var(--s-0); color: var(--ink-3); max-width: 80ch; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Baton home">
+      <img src="assets/icon.svg" alt="" width="34" height="34">
+      Baton
+    </a>
+    <nav class="nav" aria-label="Sections">
+      <a href="#why">Why</a>
+      <a href="#how">How it works</a>
+      <a href="#safety">Safety</a>
+      <a href="#fair-use">Fair use</a>
+      <a href="#faq">FAQ</a>
+      <a data-link="source" href="#download">Source</a>
+    </nav>
+    <a class="btn btn-primary" data-link="download" href="#download">Download</a>
+  </div>
+</header>
+
+<main id="main">
+  <!-- HERO -->
+  <section class="hero" id="top">
+    <div class="wrap">
+      <div class="hero-grid">
+        <h1>Your Claude accounts. <span class="hand">One history.</span></h1>
+        <p class="lede">Baton is a free Mac app for one person with more than one Claude account of their own, say personal and work. Pick up the same project, with the same conversation history, from whichever of your accounts fits the work, in Claude Code in Terminal or in the Claude desktop app.</p>
+        <div class="hero-side">
+          <div class="hero-actions">
+            <a class="btn btn-primary" data-link="download" href="#download">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+              Download for Mac
+            </a>
+            <a class="btn btn-ghost" data-link="source" href="#download">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5"/><path d="m16 7 5 5-5 5"/></svg>
+              View the source
+            </a>
+          </div>
+          <p class="hero-meta">
+            <span>Free, MIT licence</span>
+            <span>Apple silicon, macOS</span>
+            <span>No servers, no telemetry</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="lanes" aria-label="Example: two accounts, one Mac">
+        <div class="lane"><span class="n">1</span><span class="who"><b><span class="dot l1"></span>Personal</b><span>alex@example.com</span><code>~/.claude</code></span><span class="tag">Terminal + Claude</span></div>
+        <div class="lane"><span class="n">2</span><span class="who"><b><span class="dot l2"></span>Work</b><span>alex@company.example</span><code>~/.claude-work</code></span><span class="tag">Terminal + Claude Work</span></div>
+      </div>
+
+      <figure class="shot hero-shot">
+        <div class="frame">
+          <div class="frame-bar" aria-hidden="true"><i></i><i></i><i></i><span>Baton</span></div>
+          <img src="assets/screens/01-accounts.png" width="1180" height="1020"
+               alt="Baton's Accounts screen. Two accounts, Personal and Work, each with a Terminal row showing its config folder, a desktop app row, and usage badges for the 5-hour and weekly limits.">
+        </div>
+        <figcaption>The Accounts screen: each of your accounts with its Terminal folder, its own desktop app and its current usage. Example data from a test Mac.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- WHY -->
+  <section class="section" id="why">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">The problem</p>
+        <h2>Two accounts means two separate histories.</h2>
+        <p class="lede">Claude Code keeps each account's chats in that account's own folder. Start a project as Personal and, signed in as Work, it isn't there. The desktop app holds one sign-in at a time, so switching means signing out and back in.</p>
+      </div>
+
+      <div class="compare">
+        <div class="panel">
+          <div class="panel-head"><h3>Without Baton</h3><span class="badge">Today</span></div>
+          <svg class="dg" viewBox="0 0 360 330" role="img" aria-labelledby="dg1t dg1d">
+            <title id="dg1t">Without Baton</title>
+            <desc id="dg1d">Personal and Work each write to their own history. The acme-web chats exist only under Personal; Work's copy is empty. One desktop app, signed in as one account.</desc>
+            <!-- accounts -->
+            <rect class="box" x="8" y="8" width="160" height="54" rx="10"/>
+            <circle class="f1" cx="26" cy="29" r="5"/>
+            <text class="t-b" x="38" y="33">Personal</text>
+            <text class="t-m" x="22" y="51">~/.claude</text>
+            <rect class="box" x="192" y="8" width="160" height="54" rx="10"/>
+            <circle class="f2" cx="210" cy="29" r="5"/>
+            <text class="t-b" x="222" y="33">Work</text>
+            <text class="t-m" x="206" y="51">~/.claude-work</text>
+            <!-- wires -->
+            <path class="wire l1" d="M88 62 V112"/>
+            <path class="wire l2" d="M272 62 V112"/>
+            <!-- histories -->
+            <rect class="box" x="8" y="112" width="160" height="116" rx="10"/>
+            <text class="t-s" x="20" y="132">acme-web history</text>
+            <rect class="row" x="18" y="142" width="140" height="22" rx="5"/><rect class="bar" x="26" y="151" width="96" height="4" rx="2"/>
+            <rect class="row" x="18" y="169" width="140" height="22" rx="5"/><rect class="bar" x="26" y="178" width="78" height="4" rx="2"/>
+            <rect class="row" x="18" y="196" width="140" height="22" rx="5"/><rect class="bar" x="26" y="205" width="110" height="4" rx="2"/>
+            <rect class="box-off" x="192" y="112" width="160" height="116" rx="10"/>
+            <text class="t-s" x="204" y="132">acme-web history</text>
+            <text class="t-b" x="272" y="178" text-anchor="middle" style="fill:var(--ink-3)">No chats</text>
+            <text class="t-s" x="272" y="196" text-anchor="middle">starts from zero</text>
+            <!-- desktop app -->
+            <rect class="box" x="8" y="262" width="344" height="58" rx="10"/>
+            <text class="t-b" x="22" y="285">Claude desktop app</text>
+            <text class="t-s" x="22" y="304">One sign-in: Personal. Work has to sign out and in.</text>
+            <path class="wire-off" d="M88 228 V262"/>
+            <path class="wire-off" d="M272 228 V262"/>
+            <path class="x" d="M263 239 l18 14 M281 239 l-18 14"/>
+          </svg>
+          <ul>
+            <li>The same project, two disconnected histories.</li>
+            <li>Continue as the other account and Claude has no context.</li>
+            <li>One desktop app, one account at a time.</li>
+          </ul>
+        </div>
+
+        <div class="panel fix">
+          <div class="panel-head"><h3>With Baton</h3><span class="badge">One history</span></div>
+          <svg class="dg" viewBox="0 0 360 330" role="img" aria-labelledby="dg2t dg2d">
+            <title id="dg2t">With Baton</title>
+            <desc id="dg2d">Personal and Work both connect to one shared acme-web history. Each account has its own desktop app, and both show the same chats.</desc>
+            <rect class="box" x="8" y="8" width="160" height="54" rx="10"/>
+            <circle class="f1" cx="26" cy="29" r="5"/>
+            <text class="t-b" x="38" y="33">Personal</text>
+            <text class="t-m" x="22" y="51">~/.claude</text>
+            <rect class="box" x="192" y="8" width="160" height="54" rx="10"/>
+            <circle class="f2" cx="210" cy="29" r="5"/>
+            <text class="t-b" x="222" y="33">Work</text>
+            <text class="t-m" x="206" y="51">~/.claude-work</text>
+            <!-- converging wires -->
+            <path class="wire l1" d="M88 62 C88 90, 150 88, 150 112"/>
+            <path class="wire l2" d="M272 62 C272 90, 210 88, 210 112"/>
+            <path class="wire l1 flow" d="M88 62 C88 90, 150 88, 150 112"/>
+            <path class="wire l2 flow" d="M272 62 C272 90, 210 88, 210 112"/>
+            <!-- shared history -->
+            <rect class="box-hi" x="58" y="112" width="244" height="116" rx="10"/>
+            <text class="t-b" x="70" y="132">acme-web history</text>
+            <text class="t-s" x="290" y="132" text-anchor="end">shared</text>
+            <rect class="row" x="68" y="142" width="224" height="22" rx="5"/><text x="78" y="157" style="font-size:10.5px">Fix the search filter on the orders page</text>
+            <rect class="row" x="68" y="169" width="224" height="22" rx="5"/><text x="78" y="184" style="font-size:10.5px">Add dark mode to the settings screen</text>
+            <rect class="row" x="68" y="196" width="224" height="22" rx="5"/><rect class="bar-hi" x="78" y="205" width="150" height="4" rx="2"/>
+            <!-- desktop apps -->
+            <path class="wire l1" d="M120 228 V262"/>
+            <path class="wire l2" d="M240 228 V262"/>
+            <rect class="box" x="8" y="262" width="166" height="58" rx="10"/>
+            <circle class="f1" cx="24" cy="281" r="4"/>
+            <text class="t-b" x="34" y="285">Claude</text>
+            <text class="t-s" x="20" y="304">signed in as Personal</text>
+            <rect class="box" x="186" y="262" width="166" height="58" rx="10"/>
+            <circle class="f2" cx="202" cy="281" r="4"/>
+            <text class="t-b" x="212" y="285">Claude Work</text>
+            <text class="t-s" x="198" y="304">signed in as Work</text>
+          </svg>
+          <ul>
+            <li>One history per project, continued from either account.</li>
+            <li>You choose, per project, which accounts may continue it.</li>
+            <li>A desktop app per account, open side by side.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW -->
+  <section class="section" id="how">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">How it works</p>
+        <h2>Three steps, each shown before it happens.</h2>
+      </div>
+
+      <ol class="steps">
+        <li class="step">
+          <div class="step-text">
+            <span class="step-no" aria-hidden="true">1</span>
+            <h3>Add your accounts and sign in once each.</h3>
+            <p>Your existing <code>~/.claude</code> becomes account 1 and is only ever read. Each extra account gets its own folder, like <code>~/.claude-work</code>, and you sign in with Claude Code's own <code>claude auth login</code>.</p>
+            <ul>
+              <li>Each extra account also gets its own copy of the Claude desktop app, with a tinted icon, so several accounts can be open side by side.</li>
+              <li>Each desktop app needs one sign-in the first time. Baton never copies sign-ins.</li>
+            </ul>
+          </div>
+          <figure class="shot">
+            <div class="frame">
+              <div class="frame-bar" aria-hidden="true"><i></i><i></i><i></i><span>Welcome to Baton</span></div>
+              <img src="assets/screens/09-intro-desktop-app.png" width="1180" height="760" loading="lazy"
+                   alt="Baton's welcome guide, step 2 of 4: The desktop app. It explains that each account gets its own Claude desktop app and needs one sign-in the first time.">
+            </div>
+          </figure>
+        </li>
+
+        <li class="step">
+          <div class="step-text">
+            <span class="step-no" aria-hidden="true">2</span>
+            <h3>Choose who can continue each project.</h3>
+            <p>Nothing is shared by default. Open a project, switch on the accounts that may continue it, and review the exact file operations before anything changes.</p>
+            <ul>
+              <li>Turning an account off hides that project's chats from its desktop apps. They move into a backup, never deleted.</li>
+              <li>Turning it back on restores them.</li>
+              <li>Sign-ins, settings and prompt history always stay per account.</li>
+            </ul>
+          </div>
+          <figure class="shot">
+            <div class="frame">
+              <div class="frame-bar" aria-hidden="true"><i></i><i></i><i></i><span>Shared projects</span></div>
+              <img src="assets/screens/05-share-modal.png" width="1180" height="760" loading="lazy"
+                   alt="The Share acme-web dialog. Personal always has access because it holds the history. A switch lets Work continue the project, with a note that turning it off hides 6 chats into a backup.">
+            </div>
+          </figure>
+        </li>
+
+        <li class="step">
+          <div class="step-text">
+            <span class="step-no" aria-hidden="true">3</span>
+            <h3>Continue as the account that fits the work.</h3>
+            <p>Pick a project and an account, then press <kbd>⌘↩</kbd>. Baton opens Terminal with <code>claude --continue</code> as that account, or opens that account's desktop app, with the project's full history.</p>
+            <ul>
+              <li>Browse a project's sessions by title, time, size and git branch, and resume any one.</li>
+              <li>If another account is still working in the same project, Baton tells you first.</li>
+            </ul>
+          </div>
+          <figure class="shot">
+            <div class="frame">
+              <div class="frame-bar" aria-hidden="true"><i></i><i></i><i></i><span>Sessions</span></div>
+              <img src="assets/screens/08-sessions.png" width="1180" height="760" loading="lazy"
+                   alt="The Sessions screen for project acme-web as Personal: usage limits at 18 percent for the 5-hour session and 62 percent weekly, a Continue in Terminal button, and a list of the project's sessions.">
+            </div>
+          </figure>
+        </li>
+      </ol>
+
+      <div class="also" aria-label="Also included">
+        <div><h3>Usage you can trust</h3><p>Each account's 5-hour and weekly usage, read from Claude Code's own <code>/usage</code>. No model call, zero tokens. Optional warning at a level you set.</p></div>
+        <div><h3>Tidy duplicate apps</h3><p>Two desktop apps signed in as the same email? Accounts offers to merge them and keeps every chat.</p></div>
+        <div><h3>Doctor</h3><p>Checks links, sync, app copies, disk space, interrupted operations and snapshot integrity.</p></div>
+        <div><h3>Keyboard first</h3><p><kbd>⌘↩</kbd> continue, <kbd>⌘F</kbd> search, <kbd>⌘1</kbd>…<kbd>9</kbd> account, <kbd>⌘P</kbd> project.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SAFETY -->
+  <section class="section" id="safety">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Safety</p>
+        <h2>Every change is previewed, backed up and undoable.</h2>
+        <p class="lede">Baton touches the folders where your chats live, so every write goes through one engine, in this order. If any step fails, or your Mac stops halfway, the operation rolls back.</p>
+      </div>
+
+      <ol class="relay" aria-label="The order of every change">
+        <li>Plan</li>
+        <li>Dry-run preview</li>
+        <li>You confirm</li>
+        <li>Check running apps</li>
+        <li>Snapshot</li>
+        <li>Verify snapshot</li>
+        <li>Journal</li>
+        <li>Apply step by step</li>
+        <li>Verify</li>
+        <li class="end">Undo any time</li>
+      </ol>
+
+      <div class="safety-grid">
+        <figure class="shot">
+          <div class="frame">
+            <div class="frame-bar" aria-hidden="true"><i></i><i></i><i></i><span>Review changes</span></div>
+            <img src="assets/screens/07-share-preview.png" width="1180" height="760" loading="lazy"
+                 alt="A change preview listing a dry run of 21 file operations, each with its full path, and a note that every touched path is snapshotted and verified before anything changes.">
+          </div>
+          <figcaption>The preview lists every file operation, with full paths, before you press Apply.</figcaption>
+        </figure>
+
+        <ul class="promises">
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h18v13H3z"/><path d="M8 7V4h8v3"/><path d="M9 13h6"/></svg>
+            <div><b>Nothing is ever deleted</b><span>Removed items are unlinked, moved into a verified snapshot or the hidden-chats backup, or moved to the macOS Trash. Transcripts are never overwritten.</span></div>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            <div><b>Never reads your login tokens</b><span>It reads only the email and account id from <code>.claude.json</code>, to label each account. Sign-ins stay in your Keychain.</span></div>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8"/><path d="m9 9 6 4M15 9l-6 4"/></svg>
+            <div><b>Never modifies Claude</b><span>A hard guard refuses any write to <code>~/.claude</code>, to <code>/Applications/Claude.app</code>, or to an app's data beyond its Code-tab chat list.</span></div>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l16 16"/><path d="M8.5 5.6A9 9 0 0 1 21 12a9 9 0 0 1-2 3"/><path d="M5.5 8.6A9 9 0 0 0 12 21a9 9 0 0 0 3.4-.7"/></svg>
+            <div><b>No servers, no telemetry</b><span>Everything stays on your Mac. Diagnostics exports are redacted: no tokens, no chat content, emails masked.</span></div>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+            <div><b>One-click undo</b><span>Every operation is in History with an Undo, which is itself previewed and snapshotted. A Dry run switch logs every command and runs none.</span></div>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAIR USE -->
+  <section class="section" id="fair-use">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Fair use</p>
+        <h2>For one person and their own accounts.</h2>
+        <p class="lede">Baton organises your own work across accounts you already have. It doesn't change what any account is entitled to, and it is not a way to get more usage.</p>
+      </div>
+
+      <div class="fair">
+        <div class="fair-col do">
+          <h3><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></span>Do</h3>
+          <ul>
+            <li><b>Use it with your own accounts</b>, on your own Mac.</li>
+            <li><b>Use the right account for the right work.</b> Company code on the work account, side projects on your personal one.</li>
+            <li><b>Follow your employer's policy</b> on which accounts and tools you may use for their work.</li>
+            <li><b>Follow the terms</b> of each plan you use.</li>
+          </ul>
+        </div>
+        <div class="fair-col dont">
+          <h3><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span>Don't</h3>
+          <ul>
+            <li><b>Don't share an account</b> with other people, or use someone else's.</li>
+            <li><b>Don't buy several personal plans</b> to rotate between them past usage limits.</li>
+            <li><b>Don't continue with another account</b> after one has been suspended or banned.</li>
+            <li><b>Don't resell access</b> or run Baton as a service for others.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="terms">
+        <a href="https://www.anthropic.com/legal/aup" rel="noopener">Usage Policy</a>
+        <a href="https://www.anthropic.com/legal/consumer-terms" rel="noopener">Consumer Terms of Service</a>
+        <a href="https://code.claude.com/docs/en/legal-and-compliance" rel="noopener">Claude Code legal and compliance</a>
+      </div>
+      <p class="note">These terms apply to your accounts whether or not you use Baton. If you are unsure whether your use is allowed, read them, or ask your employer for a work account.</p>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section" id="faq">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">FAQ</p>
+        <h2>Questions people ask first.</h2>
+      </div>
+      <div class="faq">
+        <details open>
+          <summary>Is it allowed?</summary>
+          <div class="a">
+            <p>Baton is for one person using their own accounts on their own Mac, for example keeping personal and work use separate while still continuing your own project's history. It signs in only through Claude Code's and the Claude app's own sign-in flows and never shares or copies sign-ins.</p>
+            <p>Don't use it to share an account, and follow the terms of the plans you use. See <a href="#fair-use">Fair use</a>.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Does it read my tokens?</summary>
+          <div class="a">
+            <p>No. Baton never reads, copies or stores credentials. It reads only the email and account id from an account's <code>.claude.json</code> to show which account is which. At start-up it clears any inherited <code>CLAUDE_*</code> and <code>ANTHROPIC_*</code> variables from its own environment, so each <code>claude</code> it opens uses exactly the account you picked.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Will I lose chats?</summary>
+          <div class="a">
+            <p>No. Transcripts in <code>~/.claude/projects</code> are never deleted or overwritten, and account 1 always sees everything. Turning an account off for a project moves that project's desktop chat-list entries into a backup; turning it on restores them. Every change has a verified snapshot and an Undo.</p>
+            <p>One thing to avoid: two accounts writing to the same project at the same time. Baton warns you when another account is still running there.</p>
+          </div>
+        </details>
+        <details>
+          <summary>macOS says it can't open Baton.</summary>
+          <div class="a">
+            <p>Baton is ad-hoc signed but not yet notarized by Apple, so Gatekeeper blocks the first launch. Right-click <b>Baton.app</b>, choose <b>Open</b>, then <b>Open</b> again. On newer macOS versions that don't offer this, try to open it once, then go to <b>System Settings › Privacy &amp; Security</b> and click <b>Open Anyway</b>. You only do this once. Or build it from source.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Does it run on Intel Macs?</summary>
+          <div class="a">
+            <p>The download is an Apple silicon (arm64) build only for now. An Intel build may work from source with <code>electron-builder --mac --x64</code>, but it is untested. Windows and Linux are not supported.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Does it upload anything?</summary>
+          <div class="a"><p>No. Baton has no server and no telemetry. The source is public, so you can check.</p></div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOWNLOAD -->
+  <section class="section" id="download">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Get Baton</p>
+        <h2>Free and open source, under the MIT licence.</h2>
+      </div>
+      <div class="get">
+        <div class="card primary">
+          <h3>Download</h3>
+          <p class="muted">For macOS on Apple silicon.</p>
+          <ol>
+            <li>Download <code>Baton-<span data-version>1.0.0</span>-arm64.dmg</code> from the latest release.</li>
+            <li>Open it and drag <b>Baton</b> to Applications.</li>
+            <li>First launch: right-click Baton, choose <b>Open</b>, then <b>Open</b>.</li>
+          </ol>
+          <div><a class="btn btn-primary" data-link="download" href="#download">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+            Download the latest release
+          </a></div>
+          <p class="fine">Opening Terminal for an account the first time asks for permission to control Terminal. That is how Baton opens a window as the account you chose.</p>
+        </div>
+        <div class="card">
+          <h3>Build from source</h3>
+          <p class="muted">Needs Apple silicon, Node.js 22 or later, and the Xcode Command Line Tools.</p>
+          <div class="code">
+            <button class="copy" type="button" id="copy-build" data-copy="build-cmds">Copy</button>
+<pre id="build-cmds"><code>git clone <span data-clone>https://github.com/vamsijanaki/baton</span>.git
+cd baton
+npm ci
+npm test       <span class="c"># sandboxed, uses a fake HOME</span>
+npm run dist   <span class="c"># → release/Baton-*-arm64.dmg</span></code></pre>
+          </div>
+          <p><a data-link="source" href="#download">Read the source on GitHub</a></p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <div class="foot-row">
+      <a class="brand" href="#top"><img src="assets/icon.svg" alt="" width="28" height="28">Baton</a>
+      <a data-link="source" href="#download">Source</a>
+      <a data-link="download" href="#download">Releases</a>
+      <span>MIT licence © 2026 Vamsi Janaki</span>
+    </div>
+    <p class="disclaimer">Not affiliated with or endorsed by Anthropic. Claude is a trademark of Anthropic. Baton is an independent open-source project; Claude and Claude Code are named only to describe what it works with.</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var cfg = window.BATON || {};
+  document.querySelectorAll("[data-link]").forEach(function (a) {
+    var url = cfg[a.getAttribute("data-link")];
+    if (url) { a.href = url; a.rel = "noopener"; }
+  });
+  if (cfg.version) document.querySelectorAll("[data-version]").forEach(function (el) { el.textContent = cfg.version; });
+  if (cfg.source) document.querySelectorAll("[data-clone]").forEach(function (el) { el.textContent = cfg.source.replace(/\/$/, ""); });
+
+  document.querySelectorAll("[data-copy]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var el = document.getElementById(btn.getAttribute("data-copy"));
+      var text = el.innerText.split("\n").map(function (l) { return l.replace(/\s+#.*$/, "").trimEnd(); }).join("\n").trim();
+      function done(msg) { btn.textContent = msg; setTimeout(function () { btn.textContent = "Copy"; }, 1600); }
+      function fallback() {
+        var r = document.createRange(); r.selectNodeContents(el);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        done("Press ⌘C");
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { done("Copied"); }, fallback);
+      } else { fallback(); }
+    });
+  });
+})();
+</script>
+</body>
+</html>

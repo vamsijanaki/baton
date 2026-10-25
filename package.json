@@ -1,0 +1,96 @@
+{
+  "name": "baton",
+  "version": "1.0.0",
+  "description": "Your Claude Code accounts, one history. A Mac app for people who use more than one of their own Claude Code accounts.",
+  "main": "out/main.js",
+  "scripts": {
+    "icons": "./scripts/make-icons.sh",
+    "build:main": "esbuild electron/main.ts --bundle --platform=node --format=cjs --external:electron --outfile=out/main.js && esbuild electron/preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=out/preload.cjs && esbuild electron/tray-preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=out/tray-preload.cjs",
+    "build:renderer": "vite build",
+    "build": "npm run build:helper && npm run build:main && npm run build:renderer",
+    "typecheck": "tsc -p tsconfig.json",
+    "start": "npm run build && electron .",
+    "check:core": "esbuild scripts/check-core.ts --bundle --platform=node --format=cjs --outfile=out/check-core.cjs --log-level=warning && node out/check-core.cjs",
+    "dist": "npm test && npm run build && electron-builder --mac --arm64",
+    "build:helper": "./scripts/build-helper.sh",
+    "test": "esbuild scripts/test.ts --bundle --platform=node --format=cjs --outfile=out/test.cjs --log-level=warning && node out/test.cjs",
+    "check:real": "esbuild scripts/check-real.ts --bundle --platform=node --format=cjs --outfile=out/check-real.cjs --log-level=warning && node out/check-real.cjs",
+    "shots": "npm run build:main && npm run build:renderer && H=$(mktemp -d)/home && node scripts/shots/fixture.cjs \"$H\" && CS_REPO=$PWD CS_FAKE_HOME=\"$H\" CS_OUT=$PWD/docs/screenshots electron scripts/shots",
+    "install:local": "./scripts/install.sh"
+  },
+  "author": "Vamsi Janaki",
+  "license": "MIT",
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "clsx": "^2.1.1",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
+    "lucide-react": "^1.61.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  },
+  "productName": "Baton",
+  "private": true,
+  "build": {
+    "appId": "com.vamsijanaki.baton",
+    "productName": "Baton",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/main.js",
+      "out/preload.cjs",
+      "out/tray-preload.cjs",
+      "dist/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/trayTemplate.png",
+        "to": "trayTemplate.png"
+      },
+      {
+        "from": "build/trayTemplate@2x.png",
+        "to": "trayTemplate@2x.png"
+      },
+      {
+        "from": "build/baton-desktop-helper",
+        "to": "baton-desktop-helper"
+      }
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.developer-tools",
+      "identity": "-",
+      "darkModeSupport": true,
+      "target": [
+        "dmg",
+        "dir"
+      ],
+      "extendInfo": {
+        "NSAppleEventsUsageDescription": "Baton opens Terminal windows to run claude for the account you choose."
+      },
+      "hardenedRuntime": false
+    },
+    "asar": true,
+    "dmg": {
+      "title": "Baton ${version}",
+      "artifactName": "Baton-${version}-${arch}.dmg"
+    }
+  },
+  "homepage": "https://github.com/vamsijanaki/baton",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vamsijanaki/baton.git"
+  }
+}

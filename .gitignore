@@ -1,0 +1,9 @@
+node_modules/
+out/
+dist/
+release/
+.DS_Store
+build/baton-desktop-helper
+# screenshots must come from `npm run shots` (fake HOME) only
+docs/screenshots/v*/
+*.local.*
