@@ -1,6 +1,25 @@
 <!doctype html>
 <html lang="en">
 <head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-SEH67S5QEX"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-SEH67S5QEX');
+
+  // Count Download and GitHub clicks as events (the links are redirects, so page views alone miss them).
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[href]');
+    if (!a) return;
+    var h = a.getAttribute('href') || '';
+    if (h === '/download') gtag('event', 'download_click', { link_text: (a.textContent || '').trim().slice(0, 40), transport_type: 'beacon' });
+    else if (h.indexOf('github.com/vamsijanaki/baton') !== -1 || h === '/github') gtag('event', 'github_click', { link_url: h, transport_type: 'beacon' });
+    else if (h.indexOf('github.com/sponsors') !== -1) gtag('event', 'sponsor_click', { transport_type: 'beacon' });
+  });
+</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>How Baton Works</title>
@@ -798,6 +817,7 @@ td.none { color: var(--accent); font-weight: 600; }
       </nav>
     </div>
     <div class="foot-fine">
+      <p>This site counts visits with Google Analytics. The Baton app itself has no analytics or tracking.</p>
       <p>Not affiliated with or endorsed by Anthropic. Claude is a trademark of Anthropic.</p>
       <p>MIT © 2026 Vamsi Janaki</p>
     </div>
