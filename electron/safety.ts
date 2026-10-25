@@ -103,7 +103,7 @@ export type Step =
   | { t: 'mkdir'; path: string }
   | { t: 'symlink'; path: string; target: string }
   | { t: 'unlink'; path: string } // symlinks only
-  | { t: 'write'; path: string; from?: string; data?: string; mtimeMs?: number } // atomic tmp + rename
+  | { t: 'write'; path: string; from?: string; data?: string; mtimeMs?: number; mode?: number } // atomic tmp + rename
   | { t: 'quarantine'; path: string } // move into the operation's quarantine folder
   | { t: 'moveAside'; path: string; to: string } // rename, e.g. a private folder kept next to its link
   | { t: 'hide'; path: string; to: string } // move a Code-tab index file into ~/.baton/hidden (kept, restorable)
@@ -126,6 +126,23 @@ export function classify(p: string): { area: 'claude-app' | 'transcripts' | 'def
   return { area: 'other' };
 }
 
+/**
+ * The ONE exception inside ~/.claude: account 1's settings.json, and only for the passive usage capture operations
+ * (which change its `statusLine` key) and the Undo of one of them. Only `write` and `quarantine` of exactly that
+ * file are allowed; every other ~/.claude path stays refused.
+ */
+export const CLAUDE_SETTINGS_OPS: readonly string[] = ['usage-hook-on', 'usage-hook-off'];
+export const claudeSettingsFile = () => path.join(defaultDir(), 'settings.json');
+export interface GuardContext {
+  /** Set only for CLAUDE_SETTINGS_OPS (or an undo of one): allows writing/quarantining ~/.claude/settings.json. */
+  claudeSettings?: boolean;
+}
+/** The guard context an operation gets. An undo qualifies only when the journal entry it undoes is one of those kinds. */
+export function guardContext(op: Pick<Operation, 'kind' | 'undoOfKind'>): GuardContext {
+  return { claudeSettings: CLAUDE_SETTINGS_OPS.includes(op.kind) || (op.kind === 'undo' && !!op.undoOfKind && CLAUDE_SETTINGS_OPS.includes(op.undoOfKind)) };
+}
+const samePath = (a: string, b: string) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
+
 const INDEX_FILE = /claude-code-sessions\/[^/]+\/[^/]+\/local_[^/]+\.json$/;
 const inIndexArea = (p: string) => /\/claude-code-sessions(\/|$)/.test(p);
 
@@ -138,8 +155,10 @@ const inIndexArea = (p: string) => /\/claude-code-sessions(\/|$)/.test(p);
  *  - ~/Library/Application Support/Claude*: only the Code-tab index area (claude-code-sessions) may change —
  *    index files written, links unlinked, op-created items quarantined; a brand-new profile folder may be created;
  *    a whole profile folder may only go to the Trash.
+ *  - The one exception: ~/.claude/settings.json may be written or quarantined when ctx.claudeSettings is set
+ *    (passive usage capture, see guardContext) — never through a symlink, never anything else in ~/.claude.
  */
-export function guardStep(s: Step, live = false): string | null {
+export function guardStep(s: Step, live = false, ctx: GuardContext = {}): string | null {
   if (s.t === 'hide') {
     // only a local_*.json sidebar entry, only into the hidden area, never over something
     if (!path.isAbsolute(s.path) || !path.isAbsolute(s.to)) return `not an absolute path: ${s.path}`;
@@ -165,7 +184,11 @@ export function guardStep(s: Step, live = false): string | null {
     for (const k of kinds) {
       if (k.area === 'claude-app') return `${p}: /Applications/Claude.app is never modified`;
       if (k.area === 'transcripts' && !((s.t === 'write' || s.t === 'mkdir') && !st)) return `${p}: transcripts in ~/.claude/projects are never deleted or overwritten (only new files may be added)`;
-      if (k.area === 'default-account') return `${p}: ~/.claude (account 1) is never written`;
+      if (k.area === 'default-account') {
+        const exception = ctx.claudeSettings && (s.t === 'write' || s.t === 'quarantine') && samePath(p, claudeSettingsFile()) && (!live || !st || st.isFile());
+        if (exception) continue;
+        return `${p}: ~/.claude (account 1) is never written`;
+      }
       if (k.area === 'desktop-data') {
         const rel = path.relative(k.profileDir!, path.resolve(p));
         if (s.t === 'trash' && rel === '' && path.basename(k.profileDir!).startsWith('Claude-')) continue;
@@ -354,6 +377,8 @@ export interface Operation {
   notes?: string[]; // shown in the preview (what is NOT changed, etc.)
   /** Extra paths for the running check only (not snapshotted): e.g. a whole desktop data folder that must be quit. */
   busyPaths?: string[];
+  /** Undo only: the kind of the operation being undone (decides the guard context; checked against the journal). */
+  undoOfKind?: string;
 }
 export interface JournalEntry {
   id: string;
@@ -426,7 +451,8 @@ export interface Preview {
   notes: string[];
 }
 export async function previewOperation(op: Operation): Promise<Preview> {
-  const refused = op.steps.map((s) => guardStep(s)).filter((x): x is string => !!x);
+  const ctx = guardContext(op);
+  const refused = op.steps.map((s) => guardStep(s, false, ctx)).filter((x): x is string => !!x);
   const busy = hooks.busy ? await hooks.busy([...op.touches, ...(op.busyPaths ?? [])]) : [];
   return { title: op.title, kind: op.kind, lines: op.steps.map(describeStep), refused, busy, touches: op.touches, notes: op.notes ?? [] };
 }
@@ -461,9 +487,9 @@ function moveInto(src: string, dst: string) {
   }
 }
 
-async function applyStep(j: JournalEntry, i: number) {
+async function applyStep(j: JournalEntry, i: number, ctx: GuardContext) {
   const s = j.steps[i];
-  const why = guardStep(s, true);
+  const why = guardStep(s, true, ctx);
   if (why) throw new Error(`Refused by the guard list: ${why}`);
   const st = lstat(s.path);
   const pre: PreState = { existed: !!st, linkTarget: st?.isSymbolicLink() ? fs.readlinkSync(s.path) : undefined };
@@ -499,7 +525,8 @@ async function applyStep(j: JournalEntry, i: number) {
       const buf = s.from !== undefined ? fs.readFileSync(s.from) : Buffer.from(s.data ?? '', 'utf8');
       fs.mkdirSync(path.dirname(s.path), { recursive: true });
       const tmp = path.join(path.dirname(s.path), `.cs-${process.pid}-${crypto.randomBytes(3).toString('hex')}.tmp`);
-      fs.writeFileSync(tmp, buf, { mode: st ? st.mode & 0o7777 : 0o600 });
+      fs.writeFileSync(tmp, buf, { mode: s.mode ?? (st ? st.mode & 0o7777 : 0o600) });
+      if (s.mode !== undefined) fs.chmodSync(tmp, s.mode); // not narrowed by the umask
       const mt = s.mtimeMs ?? (s.from ? fs.statSync(s.from).mtimeMs : undefined);
       if (mt) fs.utimesSync(tmp, new Date(), new Date(mt));
       fs.renameSync(tmp, s.path);
@@ -648,7 +675,13 @@ export async function runOperation(op: Operation, opts: RunOptions): Promise<Jou
   if (readOnly()) throw new Error('read-only mode');
   if (!opts.confirmed) throw new Error('Operation not confirmed');
   if (!op.steps.length) throw new Error('Nothing to do');
-  const refused = op.steps.map((s) => guardStep(s)).filter(Boolean);
+  if (op.undoOfKind !== undefined) {
+    // the exception an undo gets must match what the journal says it undoes
+    const orig = opts.undoOf ? readJson<JournalEntry | null>(journalFile(opts.undoOf), null) : null;
+    if (op.kind !== 'undo' || !orig || orig.kind !== op.undoOfKind) throw new Error('Refused by the guard list: undo does not match its journal entry');
+  }
+  const ctx = guardContext(op);
+  const refused = op.steps.map((s) => guardStep(s, false, ctx)).filter(Boolean);
   if (refused.length) throw new Error(`Refused by the guard list:\n${refused.join('\n')}`);
   const busy = hooks.busy ? await hooks.busy([...op.touches, ...(op.busyPaths ?? [])]) : [];
   if (busy.length) throw Object.assign(new Error(`Quit these first — they use files this changes:\n${busy.join('\n')}`), { busy });
@@ -671,7 +704,7 @@ export async function runOperation(op: Operation, opts: RunOptions): Promise<Jou
   try {
     for (; i < op.steps.length; i++) {
       if (opts.failAtStep === i) throw new Error(`injected failure at step ${i + 1}`);
-      await applyStep(j, i);
+      await applyStep(j, i, ctx);
       j.done = i + 1;
       saveJournal(j);
       if (opts.crashAfterStep === i) process.kill(process.pid, 'SIGKILL');
@@ -747,14 +780,14 @@ export function diffSnapshot(id: string): RestoreItem[] {
 }
 
 /** Builds the operation that makes the selected paths (default: all) look exactly like the snapshot. */
-export async function planRestore(id: string, selected?: string[]): Promise<{ op: Operation; work: string; skipped: string[] }> {
+export async function planRestore(id: string, selected?: string[], ctx: GuardContext = {}): Promise<{ op: Operation; work: string; skipped: string[] }> {
   const m = readSnapshot(id);
   const work = await extractSnapshot(id);
   const pick = (p: string) => !selected || selected.some((s) => inside(p, s));
   const steps: Step[] = [];
   const skipped: string[] = [];
   const add = (s: Step) => {
-    const why = guardStep(s);
+    const why = guardStep(s, false, ctx);
     if (why) skipped.push(why);
     else steps.push(s);
   };
@@ -776,7 +809,7 @@ export async function planRestore(id: string, selected?: string[]): Promise<{ op
     }
     if (st && (e.type === 'symlink' || !st.isFile())) clear(it.path, st);
     if (e.type === 'symlink') add({ t: 'symlink', path: it.path, target: e.target! });
-    else add({ t: 'write', path: it.path, from: path.join(work, rel(it.path)), mtimeMs: e.mtimeMs });
+    else add({ t: 'write', path: it.path, from: path.join(work, rel(it.path)), mtimeMs: e.mtimeMs, ...(e.mode !== undefined && !st ? { mode: e.mode } : {}) });
   }
   // order: removals first (deepest first), then creations parents-first
   const rank = (s: Step) => (s.t === 'unlink' || s.t === 'quarantine' ? 0 : s.t === 'mkdir' ? 1 : 2);
@@ -789,7 +822,16 @@ export async function planUndo(journalId: string) {
   const j = readJson<JournalEntry | null>(journalFile(journalId), null);
   if (!j) throw new Error('Unknown operation');
   if (j.status !== 'done') throw new Error('Only completed operations can be undone (failed ones were already rolled back).');
-  const r = await planRestore(j.snapshotId);
+  const ctx = guardContext({ kind: 'undo', undoOfKind: j.kind });
+  if (ctx.claudeSettings) {
+    // ~/.claude/settings.json: undo puts back the whole file, so refuse if anything changed it since (nothing is lost)
+    for (const s of j.steps) {
+      if (s.t !== 'write' || !samePath(s.path, claudeSettingsFile())) continue;
+      const cur = lstat(s.path)?.isFile() ? sha256File(s.path) : null;
+      if (cur !== sha256(s.data ?? '')) throw new Error(`${s.path} changed after this operation. Undo would put back the whole file and lose those changes — use the Passive capture switch instead, which changes only statusLine.`);
+    }
+  }
+  const r = await planRestore(j.snapshotId, undefined, ctx);
   // things the operation moved aside / quarantined come back from where they went
   for (let i = j.steps.length - 1; i >= 0; i--) {
     const s = j.steps[i];
@@ -807,6 +849,7 @@ export async function planUndo(journalId: string) {
     if (s.t === 'quarantine' && pre?.quarantinedTo && lstat(pre.quarantinedTo) && !lstat(s.path)) r.op.notes = [...(r.op.notes ?? []), `quarantined item is restored from the snapshot copy`];
   }
   r.op.kind = 'undo';
+  r.op.undoOfKind = j.kind;
   r.op.title = `Undo: ${j.title}`;
   r.op.touches = [...new Set([...r.op.touches, ...r.op.steps.flatMap((s) => (s.t === 'moveAside' ? [s.path, s.to] : [s.path]))])];
   return r;

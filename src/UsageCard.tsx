@@ -1,7 +1,30 @@
 import { Activity, Gauge, RefreshCw, Terminal } from 'lucide-react';
 import type { Account, Usage, UsageWindow } from './types';
-import { Badge, Button, cn, Toggle, Tooltip } from './ui';
-import { timeAgo } from './lib';
+import { useState } from 'react';
+import { Badge, Button, cn, Dialog, Toggle, Tooltip } from './ui';
+import { tilde, timeAgo } from './lib';
+import { useOps } from './ops';
+
+const fmtLine = (v: unknown) => (v == null ? '(none)' : JSON.stringify(v, null, 2));
+
+/** The exact statusLine change, shown above the dry run. */
+function HookSummary({ s }: { s: { settingsFile: string; before: unknown; after: unknown } }) {
+  return (
+    <div className="space-y-1 text-[12px]">
+      <p className="text-muted">
+        Changes one key, <code>statusLine</code>, in <span className="selectable font-mono text-[11px]">{tilde(s.settingsFile)}</span>. Every other key is kept exactly as it is.
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        {(['before', 'after'] as const).map((k) => (
+          <div key={k}>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-subtle">{k}</div>
+            <pre className="selectable max-h-[140px] overflow-auto rounded-lg bg-hover px-2.5 py-1.5 font-mono text-[10.8px] leading-relaxed">{tilde(fmtLine(s[k]))}</pre>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function until(ms: number | null | undefined, now: number) {
   if (!ms) return null;
@@ -55,6 +78,27 @@ export function UsageCard({
   toast: (t: string, tone?: 'ok' | 'warn') => void;
 }) {
   const err = (e: any) => toast(String(e?.message ?? e).replace(/^Error invoking remote method '\w+': (Error: )?/, ''), 'warn');
+  const runOp = useOps();
+  const [askReplace, setAskReplace] = useState<{ current: unknown; settingsFile: string } | null>(null);
+  // passive capture on/off = a safety-engine operation (preview → confirm → snapshot → journal → undo in History)
+  const hookOp = (on: boolean, replace = false) =>
+    runOp({
+      kind: on ? 'usage-hook-on' : 'usage-hook-off',
+      args: { id: account.id, replace },
+      title: on ? `Passive capture for “${account.name}”` : `Turn off passive capture for “${account.name}”`,
+      confirmLabel: on ? 'Turn on' : 'Turn off',
+      danger: account.isDefault,
+      renderSummary: (sum) => <HookSummary s={sum} />,
+      onDone: () => toast(on ? 'Passive capture on — updates as you work' : 'Passive capture off — status line restored', 'ok'),
+    });
+  const toggleHook = (on: boolean) =>
+    window.cs
+      .usageHookInfo(account.id)
+      .then((info) => {
+        if (on && !info.installed && info.foreign) setAskReplace({ current: info.current, settingsFile: info.settingsFile });
+        else hookOp(on);
+      })
+      .catch(err);
   const u = usage;
   const checked = u?.capturedAt ?? null;
   const refresh = () =>
@@ -124,7 +168,7 @@ export function UsageCard({
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line pt-3 text-[11.5px] text-muted">
         <Toggle
           checked={!!u?.hook}
-          onChange={(v) => window.cs.usageHook(account.id, v).then((on) => on !== !!u?.hook && toast(on ? 'Passive capture on — updates as you work' : 'Passive capture off — status line restored', 'ok')).catch(err)}
+          onChange={toggleHook}
           label={
             <span title="Installs a tiny status-line command in this account's settings.json that saves the limits Claude Code already shows it. Free; turn off to restore.">
               <Activity size={11} className="mr-1 inline" />
@@ -136,6 +180,28 @@ export function UsageCard({
           Checked when Baton opens and on Refresh · at most every 15 min
         </span>
       </div>
+      <Dialog
+        open={!!askReplace}
+        onClose={() => setAskReplace(null)}
+        width={560}
+        title="Replace your status line?"
+        description={askReplace ? <>This account's <span className="font-mono text-[11px]">{tilde(askReplace.settingsFile)}</span> already has a status line that is not Baton's.</> : undefined}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAskReplace(null)} autoFocus>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={() => (setAskReplace(null), hookOp(true, true))}>
+              Replace and review…
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-2 text-[12px] text-muted">
+          <pre className="selectable max-h-[140px] overflow-auto rounded-lg bg-hover px-2.5 py-1.5 font-mono text-[10.8px] leading-relaxed">{fmtLine(askReplace?.current)}</pre>
+          <p>Baton's status line keeps running this command, so what you see stays the same. Turning capture off puts this value back exactly. You will see the exact change before anything is written.</p>
+        </div>
+      </Dialog>
     </section>
   );
 }

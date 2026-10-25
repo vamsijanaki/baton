@@ -19,7 +19,7 @@ contextBridge.exposeInMainWorld('cs', {
   usageRefresh: invoke('usageRefresh'),
   fairUseConfirm: invoke('fairUseConfirm'),
   fairUseAttestAll: invoke('fairUseAttestAll'),
-  usageHook: invoke('usageHook'),
+  usageHookInfo: invoke('usageHookInfo'),
   openUsage: invoke('openUsage'),
   desktopProfiles: invoke('desktopProfiles'),
   accountsOverview: invoke('accountsOverview'),

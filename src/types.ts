@@ -205,7 +205,7 @@ declare global {
       usageRefresh(id: string): Promise<{ throttled?: { nextAt: number; reason: string }; error?: string; suspended?: string | null }>;
       fairUseConfirm(id: string, input: AttestInput): Promise<FairUseInfo>;
       fairUseAttestAll(attested: boolean): Promise<void>;
-      usageHook(id: string, on: boolean): Promise<boolean>;
+      usageHookInfo(id: string): Promise<{ installed: boolean; foreign: boolean; current: unknown; settingsFile: string }>;
       openUsage(id: string): Promise<string>;
       desktopProfiles(): Promise<DesktopData>;
       accountsOverview(): Promise<AccountsOverview>;

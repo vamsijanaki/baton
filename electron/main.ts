@@ -37,7 +37,7 @@ import type { TerminalIdentity } from './apps';
 import { readSharing, terminalState } from './sharing';
 import { readSettings } from './safety';
 import { resolveUserData } from './roots';
-import { cachedAuth, checkAuth, describeInstall, hookStatus, installHook, probeUsage, probing, readUsage, uninstallHook, USAGE_DIR, type ProbeResult } from './usage';
+import { cachedAuth, checkAuth, hookStatus, probeUsage, probing, readUsage, type ProbeResult } from './usage';
 import { applyAttest, applySuspension, detectKind, fairUseProblem, launchGate, LINKS, needsLimitsAck, reconcileKind, recordProjectUse, type AttestInput, type UsageTrigger } from './fairuse';
 import { isTrayRoute, menuLabel, popoverPosition, POPOVER_MAX_HEIGHT, POPOVER_MIN_HEIGHT, POPOVER_WIDTH, routeLaunchResult, type LaunchResult } from './tray-logic';
 
@@ -374,34 +374,12 @@ ipcMain.handle('fairUseAttestAll', (_e, attested: boolean) => {
   persist();
 });
 
-ipcMain.handle('usageHook', async (_e, id: string, on: boolean) => {
+/** Read-only: is passive capture on, and is there a status line that is not Baton's? (Turning it on/off is an operation: usage-hook-on / usage-hook-off.) */
+ipcMain.handle('usageHookInfo', (_e, id: string) => {
   const acc = state.accounts.find((a) => a.id === id);
   if (!acc) throw new Error('Unknown account');
-  const d = describeInstall(acc);
-  if (on && d.installed) return true;
-  if (!on && !d.installed) return false;
-  const fmt = (v: unknown) => (v ? JSON.stringify(v) : '(none)');
-  // Account 1 (~/.claude) is never changed without an explicit confirm that says exactly what changes.
-  if (acc.id === 'default' || on) {
-    const r = await dialog.showMessageBox(win!, {
-      type: acc.id === 'default' ? 'warning' : 'question',
-      buttons: [on ? 'Turn on' : 'Turn off', 'Cancel'],
-      defaultId: 1,
-      cancelId: 1,
-      message: on ? `Capture usage passively for “${acc.name}”?` : `Turn off passive capture for “${acc.name}”?`,
-      detail: on
-        ? `Changes ONE key in ${d.settingsFile}:\n\nstatusLine\n  before: ${fmt(d.current)}\n  after:  ${fmt(d.next)}\n\n` +
-          `The script ${d.script} saves only the 5-hour and weekly limits from Claude Code's status-line data to ${USAGE_DIR}/. ` +
-          (d.current ? 'It runs your previous status line unchanged. ' : 'It prints a short "5h x% · week y%" status line. ') +
-          `The previous value and the whole original file are backed up.\n\nUndo: turn this toggle off — it restores statusLine to ${fmt(d.current)}.`
-        : `Restores statusLine in ${d.settingsFile} to ${fmt(d.previous)} and deletes ${d.script}.`,
-    });
-    if (r.response !== 0) return d.installed;
-  }
-  const st = on ? installHook(acc) : uninstallHook(acc);
-  logLaunch(`usage hook ${on ? 'ON' : 'OFF'} for ${acc.name}: ${d.settingsFile} statusLine = ${fmt(st.current)}`);
-  broadcast();
-  return st.installed;
+  const st = hookStatus(acc);
+  return { installed: st.installed, foreign: st.foreign, current: st.current, settingsFile: st.settingsFile };
 });
 
 // ---------- Claude desktop profiles ----------

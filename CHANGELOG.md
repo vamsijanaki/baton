@@ -8,6 +8,19 @@ Every pull request with a user-visible change adds a line under **Unreleased** (
 
 ## [Unreleased]
 
+### Changed
+
+- Turning passive usage capture on or off now opens the standard preview showing the exact `statusLine` change, and
+  can be undone from History like every other change. If an account already has its own status line, Baton asks
+  before replacing it and puts it back exactly when you turn capture off.
+
+### Security
+
+- Passive usage capture no longer edits `settings.json` outside the safety engine: both directions get a verified
+  snapshot, a journal entry, an atomic write, verification and automatic rollback. Only the `statusLine` key changes,
+  a file that is not valid JSON is refused, and `~/.claude/settings.json` is the guard list's only exception inside
+  `~/.claude`, allowed for these operations alone.
+
 ## [1.0.0] - 2026-10-25
 
 First public release. A Mac app (Apple silicon) for one person using more than one of their own Claude Code accounts.

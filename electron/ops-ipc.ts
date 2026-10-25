@@ -14,6 +14,7 @@ import * as sharing from './sharing';
 import * as desktop from './desktop';
 import * as apps from './apps';
 import * as fairuse from './fairuse';
+import * as usageHook from './usage-hook';
 import { activityLog, encodeProject, roots, sharedProjects, snapshotsDir } from './roots';
 
 const run = promisify(execFile);
@@ -195,6 +196,13 @@ export function registerOps(ctx: OpsContext) {
         const p = await findProfile(a.id);
         if (a.mode === 'everything' && a.typed !== p.name) throw new Error(`Type the app name exactly (${p.name}) to delete everything.`);
         return { op: desktop.planRemoveProfile(p, a.mode), created: Date.now() };
+      }
+      case 'usage-hook-on':
+      case 'usage-hook-off': {
+        const acc = accounts().find((x) => x.id === a?.id);
+        if (!acc) throw new Error('Unknown account');
+        const r = kind === 'usage-hook-on' ? usageHook.planHookOn(acc, { replace: a.replace === true }) : usageHook.planHookOff(acc);
+        return { op: r.op, created: Date.now(), summary: r.summary };
       }
       case 'profile-adopt': {
         const p = await findProfile(a.id);

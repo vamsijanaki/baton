@@ -14,6 +14,7 @@ import * as desktop from '../electron/desktop';
 import * as apps from '../electron/apps';
 import * as fairuse from '../electron/fairuse';
 import * as trayLogic from '../electron/tray-logic';
+import * as usageHook from '../electron/usage-hook';
 import type { Account } from '../electron/core';
 
 const REAL_HOME = os.homedir();
@@ -1151,6 +1152,184 @@ test('tray popover: same fair-use gates as the main window; usage stays informat
   ok(!n.ready && n.minutes === 11, `4 min after a check → next in 11 min (${n.minutes})`);
   ok(trayLogic.nextUsageCheck(1_000_000, 1_000_000 + 15 * 60_000).ready && trayLogic.nextUsageCheck(null).ready, 'ready after 15 min / never checked');
   ok(!trayLogic.isTrayRoute('opApply') && trayLogic.isTrayRoute('doctor'), 'the popover can only open known main-window pages');
+});
+
+// ---------- passive usage capture (status-line hook) through the engine ----------
+
+const SETTINGS_ORIG = '{\n    "model": "opus",\n  "permissions": {"allow": ["Bash(ls)"], "deny": []},\n  "env": { "A": "1" }\n}\n';
+const readF = (f: string) => fs.readFileSync(f, 'utf8');
+async function runPlan(r: { op: safety.Operation }) {
+  const pv = await safety.previewOperation(r.op);
+  ok(!pv.refused.length, `preview not refused (${pv.refused.join('; ')})`);
+  return apply(r.op);
+}
+
+test('usage hook: on/off through the engine restores ~/.claude/settings.json byte-for-byte; other keys untouched', async (s) => {
+  const def = s.accounts[0];
+  const f = path.join(s.home, '.claude', 'settings.json');
+  fs.writeFileSync(f, SETTINGS_ORIG);
+  const outside = tree(path.join(s.home, '.claude', 'projects'));
+  const on = usageHook.planHookOn(def);
+  const pv = await safety.previewOperation(on.op);
+  ok(on.op.kind === 'usage-hook-on' && !pv.refused.length, 'preview allowed for usage-hook-on');
+  ok(pv.lines.some((l) => l.includes(f)) && pv.notes.some((n) => /only the "statusLine" key changes/.test(n)), 'preview names the file and says only statusLine changes');
+  ok(pv.notes.some((n) => n.startsWith('statusLine before: (none)')) && pv.notes.some((n) => n.includes(usageHook.hookScript(def))), 'preview shows the exact before/after');
+  ok(readF(f) === SETTINGS_ORIG, 'planning/preview changes nothing');
+  const j = await apply(on.op);
+  const after = readF(f);
+  const parsed = JSON.parse(after);
+  ok(parsed.statusLine?.command === usageHook.hookScript(def), 'statusLine points at Baton\'s script');
+  const { statusLine: _sl, ...rest } = parsed;
+  ok(JSON.stringify(rest) === JSON.stringify(JSON.parse(SETTINGS_ORIG)), 'every other key keeps its JSON value');
+  ok(after.startsWith(SETTINGS_ORIG.slice(0, SETTINGS_ORIG.lastIndexOf('}', SETTINGS_ORIG.length - 3) + 1)), 'every other byte before the new key is unchanged');
+  ok(usageHook.editSettingsKey(after, 'statusLine', undefined, f) === SETTINGS_ORIG, 'removing the key again gives the original text');
+  ok((fs.statSync(usageHook.hookScript(def)).mode & 0o777) === 0o755, 'hook script is executable');
+  ok(usageHook.hookStatus(def).installed, 'hook status: on');
+  ok(safety.readSnapshot(j.snapshotId).verified && safety.readSnapshot(j.snapshotId).entries.some((e) => e.path === f && e.type === 'file'), 'verified snapshot holds the original settings.json');
+  ok(same(outside, tree(path.join(s.home, '.claude', 'projects'))), 'nothing else in ~/.claude touched');
+  ok(fs.readdirSync(path.join(s.home, '.claude')).sort().join(',') === 'projects,settings.json', 'no temp or extra files left in ~/.claude');
+  // off: byte-for-byte original, script moved into the snapshot (not deleted)
+  const off = usageHook.planHookOff(def);
+  const j2 = await runPlan(off);
+  ok(readF(f) === SETTINGS_ORIG, 'off restores the original file exactly');
+  ok(!fs.existsSync(usageHook.hookScript(def)) && !usageHook.hookStatus(def).installed, 'script gone, hook off');
+  ok(fs.existsSync(path.join(roots.snapshotsDir(), j2.snapshotId, 'quarantine')), 'script kept in the snapshot quarantine');
+  ok(usageHook.planHookOff(def).op.steps.length === 0, 'off again: nothing to do');
+  // edited in between: off changes only statusLine and keeps the user's later edit
+  await runPlan(usageHook.planHookOn(def));
+  const edited = readF(f).replace('"model": "opus"', '"model": "sonnet"');
+  fs.writeFileSync(f, edited);
+  await runPlan(usageHook.planHookOff(def));
+  const p2 = JSON.parse(readF(f));
+  ok(p2.model === 'sonnet' && !('statusLine' in p2) && JSON.stringify(p2.permissions) === JSON.stringify(JSON.parse(SETTINGS_ORIG).permissions), 'later edits kept; statusLine removed');
+  ok(readF(f) === SETTINGS_ORIG.replace('"opus"', '"sonnet"'), 'only the statusLine member was taken out (formatting kept)');
+  // an extra account with NO settings.json: on creates it, off puts it back to "no file" (kept in the snapshot)
+  const w = s.work2;
+  const wf = path.join(w.configDir, 'settings.json');
+  await runPlan(usageHook.planHookOn(w));
+  ok(JSON.parse(readF(wf)).statusLine.command === usageHook.hookScript(w), 'work2: settings.json created with only statusLine');
+  await runPlan(usageHook.planHookOff(w));
+  ok(!fs.existsSync(wf), 'work2: back to no settings.json');
+});
+
+test('usage hook: a foreign statusLine is replaced only when chosen, and restored exactly', async (s) => {
+  const def = s.accounts[0];
+  const f = path.join(s.home, '.claude', 'settings.json');
+  const orig = '{\n  "statusLine": {\n    "type": "command",\n    "command": "~/bin/my line.sh",\n    "padding": 1\n  },\n  "theme": "dark"\n}\n';
+  fs.writeFileSync(f, orig);
+  ok(usageHook.hookStatus(def).foreign && !usageHook.hookStatus(def).installed, 'status: foreign status line detected');
+  await throws(() => usageHook.planHookOn(def), /already has a status line/, 'refuses to replace without an explicit choice');
+  ok(readF(f) === orig && safety.listJournal().length === 0, 'nothing changed, no journal entry');
+  const on = usageHook.planHookOn(def, { replace: true });
+  ok(on.summary.replacesForeign && on.op.notes!.some((n) => /Replaces your existing status line/.test(n)), 'preview says it replaces the existing one');
+  await runPlan(on);
+  const p = JSON.parse(readF(f));
+  ok(p.statusLine.command === usageHook.hookScript(def) && p.statusLine.padding === 1 && p.theme === 'dark', 'replaced; padding and other keys kept');
+  ok(readF(usageHook.hookScript(def)).includes(`/bin/sh -c '~/bin/my line.sh'`), 'Baton\'s script keeps running the previous command');
+  ok(usageHook.planHookOn(def, { replace: true }).op.steps.length === 0, 'already on: nothing to do');
+  await runPlan(usageHook.planHookOff(def));
+  ok(readF(f) === orig, 'off restores the original file (and the user\'s statusLine) exactly');
+  // edited in between: the previous statusLine value comes back exactly, other edits kept
+  await runPlan(usageHook.planHookOn(def, { replace: true }));
+  fs.writeFileSync(f, readF(f).replace('"dark"', '"light"'));
+  await runPlan(usageHook.planHookOff(def));
+  const p2 = JSON.parse(readF(f));
+  ok(JSON.stringify(p2.statusLine) === JSON.stringify(JSON.parse(orig).statusLine) && p2.theme === 'light', 'previous statusLine value restored exactly; later edit kept');
+  // someone replaced Baton's statusLine with their own since: off leaves it alone
+  await runPlan(usageHook.planHookOn(def, { replace: true }));
+  const theirs = readF(f).replace(usageHook.hookScript(def), '/usr/local/bin/other');
+  fs.writeFileSync(f, theirs);
+  ok(usageHook.planHookOff(def).op.steps.length === 0 && readF(f) === theirs, 'off never touches a statusLine that is no longer Baton\'s');
+});
+
+test('usage hook: invalid or non-object settings.json is refused; nothing changes', async (s) => {
+  const def = s.accounts[0];
+  const f = path.join(s.home, '.claude', 'settings.json');
+  for (const bad of ['{ "a": 1, }', '{"a": ', '[1, 2]', '"text"', '{"statusLine": {}, "statusLine": {}}']) {
+    fs.writeFileSync(f, bad);
+    await throws(() => usageHook.planHookOn(def, { replace: true }), /not valid JSON|not a JSON object|more than once/, `refuses ${JSON.stringify(bad)}`);
+    ok(readF(f) === bad, 'file unchanged');
+  }
+  fs.writeFileSync(f, '{oops');
+  await throws(() => usageHook.planHookOff(def), /not valid JSON/, 'off refuses an invalid file too');
+  ok(safety.listJournal().length === 0 && !fs.existsSync(usageHook.hookScript(def)), 'no journal entry, no script');
+  // settings.json that is a symlink is not followed
+  const elsewhere = path.join(s.root, 'elsewhere.json');
+  fs.writeFileSync(elsewhere, '{}');
+  fs.rmSync(f);
+  fs.symlinkSync(elsewhere, f);
+  await throws(() => usageHook.planHookOn(def), /not a regular file/, 'refuses a symlinked settings.json');
+  ok(!!safety.guardStep({ t: 'write', path: f, data: '{}' }, true, { claudeSettings: true }), 'live guard refuses writing through a symlinked settings.json');
+});
+
+test('usage hook: the ~/.claude exception is only settings.json and only for these operations', async (s) => {
+  const c = path.join(s.home, '.claude');
+  const f = path.join(c, 'settings.json');
+  const ctx = safety.guardContext({ kind: 'usage-hook-on' });
+  ok(!!ctx.claudeSettings && !!safety.guardContext({ kind: 'usage-hook-off' }).claudeSettings, 'both hook kinds get the exception');
+  ok(!safety.guardContext({ kind: 'share' }).claudeSettings && !safety.guardContext({ kind: 'restore' }).claudeSettings && !safety.guardContext({ kind: 'undo' }).claudeSettings, 'other kinds (and a plain undo) do not');
+  ok(!!safety.guardContext({ kind: 'undo', undoOfKind: 'usage-hook-on' }).claudeSettings && !safety.guardContext({ kind: 'undo', undoOfKind: 'share' }).claudeSettings, 'undo only of a hook operation');
+  ok(!!safety.guardStep({ t: 'write', path: f, data: '{}' }, true), 'without the context: refused');
+  ok(!safety.guardStep({ t: 'write', path: f, data: '{}' }, true, ctx) && !safety.guardStep({ t: 'quarantine', path: f }, true, ctx), 'with it: write/quarantine of settings.json allowed');
+  for (const st of [
+    { t: 'write', path: path.join(c, 'settings.local.json'), data: '{}' },
+    { t: 'write', path: path.join(c, 'CLAUDE.md'), data: 'x' },
+    { t: 'write', path: path.join(c, '.credentials.json'), data: 'x' },
+    { t: 'write', path: path.join(c, 'sub', 'settings.json'), data: '{}' },
+    { t: 'quarantine', path: c },
+    { t: 'trash', path: f },
+    { t: 'unlink', path: f },
+    { t: 'moveAside', path: f, to: path.join(c, 'x.json') },
+    { t: 'write', path: path.join(s.store, enc(P), 's1.jsonl'), data: 'x' },
+    { t: 'mkdir', path: path.join(c, 'newdir') },
+  ] as safety.Step[]) ok(!!safety.guardStep(st, true, ctx), `with the context still refused: ${st.t} ${st.path.replace(s.home, '~')}`);
+  const before = tree(s.home);
+  await throws(() => apply({ kind: 'share', title: 'x', steps: [{ t: 'write', path: f, data: '{"pwned":1}' }], touches: [f] }), /guard/, 'another kind writing settings.json is refused');
+  await throws(() => apply({ kind: 'usage-hook-on', title: 'x', steps: [{ t: 'write', path: path.join(c, 'CLAUDE.md'), data: 'x' }], touches: [path.join(c, 'CLAUDE.md')] }), /guard/, 'a hook op writing another ~/.claude file is refused');
+  await throws(() => apply({ kind: 'undo', undoOfKind: 'usage-hook-on', title: 'x', steps: [{ t: 'write', path: f, data: '{"pwned":1}' }], touches: [f] }, { undoOf: 'nope' }), /guard/, 'an undo claiming a hook kind without a matching journal entry is refused');
+  ok(same(before, tree(s.home)) && safety.listJournal().length === 0, 'nothing changed, nothing journaled');
+});
+
+test('usage hook: History › Undo works for on and off; refused when settings.json changed since', async (s) => {
+  const def = s.accounts[0];
+  const f = path.join(s.home, '.claude', 'settings.json');
+  fs.writeFileSync(f, SETTINGS_ORIG);
+  const j = await runPlan(usageHook.planHookOn(def));
+  const u = await safety.planUndo(j.id);
+  ok(u.op.kind === 'undo' && u.op.undoOfKind === 'usage-hook-on' && !u.op.notes!.some((n) => /settings\.json/.test(n) && /never written/.test(n)), 'undo planned with settings.json included');
+  ok(u.op.steps.some((x) => x.path === f), 'undo restores settings.json');
+  await throws(() => apply(u.op), /does not match its journal entry/, 'an undo run without its journal id is refused');
+  safety.cleanupWork(u.work);
+  ok(readF(f) !== SETTINGS_ORIG, 'refused undo changed nothing');
+  // real path: with undoOf (as ops-ipc does)
+  const u1 = await safety.planUndo(j.id);
+  await apply(u1.op, { undoOf: j.id });
+  safety.cleanupWork(u1.work);
+  ok(readF(f) === SETTINGS_ORIG && !fs.existsSync(usageHook.hookScript(def)) && !usageHook.hookStatus(def).installed, 'undo of on: original file back, script gone');
+  ok(safety.listJournal().find((x) => x.id === j.id)!.undoneBy, 'original marked undone');
+  // undo of off brings capture back (script executable again)
+  await runPlan(usageHook.planHookOn(def));
+  const jOff = await runPlan(usageHook.planHookOff(def));
+  const u2 = await safety.planUndo(jOff.id);
+  await apply(u2.op, { undoOf: jOff.id });
+  safety.cleanupWork(u2.work);
+  ok(usageHook.hookStatus(def).installed && (fs.statSync(usageHook.hookScript(def)).mode & 0o777) === 0o755, 'undo of off: capture back on, script executable');
+  // settings.json changed after the operation → undo refused (it would put back the whole file)
+  const j3 = await runPlan(usageHook.planHookOff(def));
+  fs.writeFileSync(f, readF(f).replace('"opus"', '"haiku"'));
+  const keep = readF(f);
+  await throws(() => safety.planUndo(j3.id), /changed after this operation/, 'undo refused when settings.json changed since');
+  ok(readF(f) === keep, 'nothing changed');
+});
+
+test('usage hook: no settings.json write outside the engine (main.ts / usage.ts)', () => {
+  const repo = path.resolve(__dirname, '..');
+  const main = fs.readFileSync(path.join(repo, 'electron', 'main.ts'), 'utf8');
+  const usage = fs.readFileSync(path.join(repo, 'electron', 'usage.ts'), 'utf8');
+  const hook = fs.readFileSync(path.join(repo, 'electron', 'usage-hook.ts'), 'utf8');
+  ok(!/installHook|uninstallHook|ipcMain\.handle\('usageHook'/.test(main + usage), 'old direct install/uninstall paths are gone');
+  ok(!/writeFileSync|renameSync|unlinkSync|rmSync/.test(hook), 'usage-hook.ts only plans (the engine writes)');
+  ok(!/settings\.json[\s\S]{0,200}writeFileSync/.test(usage), 'usage.ts writes no settings.json');
 });
 
 // ---------- runner ----------

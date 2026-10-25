@@ -9,8 +9,8 @@
 //     Pro/Max subscribers after the first API response. The hook writes those to
 //     ~/.baton/usage/<id>.json — free updates while you work.
 //
-// Never reads credentials. Only touches an account's settings.json when the user turns the
-// passive hook on, and only the `statusLine` key; the previous value is backed up for undo.
+// Never reads credentials. The passive hook's settings.json change (the `statusLine` key only) is a
+// safety-engine operation with a preview, snapshot, journal and undo — see usage-hook.ts.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -20,11 +20,13 @@ import { promisify } from 'node:util';
 import { cleanEnv, type Account } from './core';
 import { resolveAppDir } from './roots';
 import { detectSuspension, ProbeGate, type UsageTrigger } from './fairuse';
+import { hookStatus, hookScript, passiveFile, usageId, type HookStatus } from './usage-hook';
+
+export { hookStatus, hookScript, usageId, type HookStatus };
 
 const run = promisify(execFile);
 const HOME = os.homedir();
 export const USAGE_DIR = path.join(resolveAppDir(HOME), 'usage');
-export const HOOKS_DIR = path.join(resolveAppDir(HOME), 'hooks');
 
 export interface UsageWindow {
   pct: number; // 0..100
@@ -42,12 +44,7 @@ export interface UsageSnapshot {
   suspended?: string | null; // clear "account suspended/disabled" wording seen in the output (fairuse.detectSuspension)
 }
 
-/** File id: the slug, or "default" for Account 1. */
-export const usageId = (acc: Account) => acc.slug ?? 'default';
-const passiveFile = (acc: Account) => path.join(USAGE_DIR, `${usageId(acc)}.json`);
 const probeFile = (acc: Account) => path.join(USAGE_DIR, `${usageId(acc)}.probe.json`);
-const backupFile = (acc: Account) => path.join(USAGE_DIR, `${usageId(acc)}.hook-backup.json`);
-export const hookScript = (acc: Account) => path.join(HOOKS_DIR, `statusline-${usageId(acc)}.sh`);
 
 // ---------- /usage text parsing ----------
 
@@ -253,117 +250,7 @@ export function readUsage(acc: Account, now = Date.now()): (UsageSnapshot & { pr
 }
 
 // ---------- passive status-line hook ----------
-
-const settingsFile = (acc: Account) => path.join(acc.configDir, 'settings.json');
-
-export interface HookStatus {
-  installed: boolean;
-  settingsFile: string;
-  script: string;
-  previous: unknown; // the statusLine value that will be restored on undo
-  current: unknown; // the statusLine value in settings.json now
-}
-
-export function hookStatus(acc: Account): HookStatus {
-  const s = readJson(settingsFile(acc));
-  const current = s?.statusLine ?? null;
-  const installed = !!current && typeof current.command === 'string' && current.command.includes(hookScript(acc));
-  const backup = readJson(backupFile(acc));
-  return { installed, settingsFile: settingsFile(acc), script: hookScript(acc), previous: installed ? backup?.previousStatusLine ?? null : current, current };
-}
-
-const shq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
-
-function scriptBody(acc: Account, previousCommand: string | null) {
-  const out = passiveFile(acc);
-  return `#!/bin/sh
-# Baton — usage capture for "${acc.name.replace(/[^\w .-]/g, '')}" (${acc.configDir}).
-# Saves only the rate_limits object from the status-line JSON to ${out}.
-# Turn it off in Baton (Usage → Passive capture), which restores your previous statusLine.
-in=$(cat)
-out=${shq(out)}
-rl=$(printf '%s' "$in" | /usr/bin/sed -nE 's/.*"rate_limits":(\\{("[a-z_]+":\\{[^{}]*\\},?)*\\}).*/\\1/p')
-if [ -n "$rl" ]; then
-  /bin/mkdir -p "$(dirname "$out")"
-  printf '{"source":"statusline","capturedAt":%s,"rate_limits":%s}\\n' "$(/bin/date +%s)" "$rl" > "$out.tmp" && /bin/mv -f "$out.tmp" "$out"
-fi
-${
-  previousCommand
-    ? `# your previous status line, unchanged:\nprintf '%s' "$in" | /bin/sh -c ${shq(previousCommand)}`
-    : `# no previous status line: show a short limits summary
-p5=$(printf '%s' "$rl" | /usr/bin/sed -nE 's/.*"five_hour":\\{[^}]*"used_percentage":([0-9.]+).*/\\1/p' | cut -d. -f1)
-p7=$(printf '%s' "$rl" | /usr/bin/sed -nE 's/.*"seven_day":\\{[^}]*"used_percentage":([0-9.]+).*/\\1/p' | cut -d. -f1)
-[ -n "$p5$p7" ] && printf '5h %s%% · week %s%%\\n' "\${p5:-–}" "\${p7:-–}"`
-}
-exit 0
-`;
-}
-
-/** What turning the hook on will do, for the confirm dialog. */
-export function describeInstall(acc: Account) {
-  const st = hookStatus(acc);
-  const next = { type: 'command', command: hookScript(acc) };
-  return { ...st, next };
-}
-
-export function installHook(acc: Account): HookStatus {
-  const file = settingsFile(acc);
-  const exists = fs.existsSync(file);
-  const raw = exists ? fs.readFileSync(file, 'utf8') : '';
-  let j: any = {};
-  if (raw.trim()) {
-    j = JSON.parse(raw); // throws on a broken file — never overwrite what we can't parse
-    if (!j || typeof j !== 'object' || Array.isArray(j)) throw new Error(`${file} is not a JSON object`);
-  }
-  const st = hookStatus(acc);
-  if (st.installed) return st;
-  const prev = j.statusLine ?? null;
-  const prevCmd = prev && prev.type === 'command' && typeof prev.command === 'string' ? prev.command : null;
-  // backup: previous statusLine (for undo) + the whole original file, once
-  writeJson(backupFile(acc), {
-    settingsFile: file,
-    fileExisted: exists,
-    previousStatusLine: prev,
-    originalFile: raw,
-    installedAt: new Date().toISOString(),
-  });
-  fs.mkdirSync(HOOKS_DIR, { recursive: true });
-  fs.writeFileSync(hookScript(acc), scriptBody(acc, prevCmd), { mode: 0o755 });
-  const next: any = { type: 'command', command: hookScript(acc) };
-  if (prev && typeof prev === 'object') {
-    if (prev.padding != null) next.padding = prev.padding;
-    if (prev.refreshInterval != null) next.refreshInterval = prev.refreshInterval;
-  }
-  j.statusLine = next;
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.baton.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(j, null, 2) + '\n');
-  fs.renameSync(tmp, file);
-  return hookStatus(acc);
-}
-
-/** Restores the previous statusLine value (or removes the key if there was none). */
-export function uninstallHook(acc: Account): HookStatus {
-  const file = settingsFile(acc);
-  const st = hookStatus(acc);
-  if (!st.installed) return st; // someone changed it since — leave their value alone
-  const backup = readJson(backupFile(acc));
-  const j = JSON.parse(fs.readFileSync(file, 'utf8'));
-  if (backup?.previousStatusLine) j.statusLine = backup.previousStatusLine;
-  else delete j.statusLine;
-  const tmp = `${file}.baton.tmp`;
-  if (!backup?.fileExisted && Object.keys(j).length === 0) fs.unlinkSync(file);
-  else {
-    fs.writeFileSync(tmp, JSON.stringify(j, null, 2) + '\n');
-    fs.renameSync(tmp, file);
-  }
-  try {
-    fs.unlinkSync(hookScript(acc));
-  } catch {
-    /* gone */
-  }
-  return hookStatus(acc);
-}
+// Turning it on/off is a safety-engine operation (usage-hook-on / usage-hook-off): see usage-hook.ts.
 
 // ---------- auth check ----------
 

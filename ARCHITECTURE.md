@@ -101,7 +101,7 @@ Components:
 | Sharing + sync | [`electron/sharing.ts`](electron/sharing.ts) | Per-project links, desktop index sync, hide/restore, migration from the old whole-folder sharing, Doctor. |
 | Desktop apps | [`electron/desktop.ts`](electron/desktop.ts), [`electron/apps.ts`](electron/apps.ts) | APFS clones, launch with `--user-data-dir`, pairing apps with accounts by email, merge & tidy up. |
 | Fair use | [`electron/fairuse.ts`](electron/fairuse.ts) | Account kind, attestation, suspension detection, usage gate, launch gate. |
-| Usage | [`electron/usage.ts`](electron/usage.ts) | `claude -p /usage` and `claude auth status`, parsed; optional status-line capture. |
+| Usage | [`electron/usage.ts`](electron/usage.ts), [`electron/usage-hook.ts`](electron/usage-hook.ts) | `claude -p /usage` and `claude auth status`, parsed; optional status-line capture, planned as engine operations (`usage-hook-on` / `usage-hook-off`). |
 | Roots | [`electron/roots.ts`](electron/roots.ts) | Every filesystem root in one overridable place (tests point it at a fake HOME), plus read-only mode. |
 | Swift helper | [`helper/baton-desktop-helper.swift`](helper/baton-desktop-helper.swift) | 100 lines of AppKit: hue-rotate an `.icns`, set a Finder icon, focus or politely quit an app by pid. |
 
@@ -309,6 +309,7 @@ case-insensitively, since APFS is case-insensitive by default.
 | `/Applications/Claude.app` | never modified | It is Anthropic's signed app. Clones are made from it, never changes to it. |
 | `~/.claude/projects` (transcripts) | only `mkdir` or `write` of a path that does not exist yet | This is the only copy of the history. Add-only means no bug in Baton can lose or corrupt a transcript. |
 | `~/.claude` (account 1, everything else) | never written | Account 1 is the setup the user had before Baton. Leaving it alone means uninstalling Baton leaves Claude exactly as it was. |
+| `~/.claude/settings.json` (the one exception) | `write` or `quarantine` of exactly this file, never through a symlink, and only for the `usage-hook-on` / `usage-hook-off` operations or the Undo of one (`CLAUDE_SETTINGS_OPS`, `guardContext`) | Passive usage capture for account 1 changes its `statusLine` key. Every other `~/.claude` path stays refused, for these operations too (tested). |
 | `~/Library/Application Support/Claude*` (desktop data) | only inside `claude-code-sessions/`; only `local_*.json` may be written or hidden; links may be unlinked; a brand-new profile folder may be created with its `.baton-color`; a whole `Claude-<Name>` folder may only go to the Trash | Desktop data holds the app's sign-in, settings and local storage. Baton only needs the sidebar index. |
 | App copies | `clone` and `rmAppCopy` only for `*.app` under Baton's own apps folders | Never removes another tool's copies (tested). |
 | `trash` | only desktop data folders and paths outside the protected areas | |
@@ -360,8 +361,9 @@ Terminal (`build/entitlements.mac.plist`). It can therefore read anything you ca
 
 What it writes: its own state folder, and through the safety engine, the areas the guard list allows. Outside the
 engine, Baton writes only its own files (`state.json`, launch scripts in `~/.baton/launch/`, `launch.log`, usage
-caches) and, if you turn on passive usage capture for an account, that account's `settings.json` `statusLine` key
-(see [section 8](#8-known-limitations)).
+caches). Turning passive usage capture on or off for an account changes that account's `settings.json` `statusLine`
+key, and that goes through the safety engine like every other change (see
+[section 8](#8-known-limitations)).
 
 ### What it refuses
 
@@ -511,11 +513,15 @@ facts about Claude's on-disk layout carry the version they were checked on.
   rebuilt on next open.
 - **Background sync applies without a per-pass preview.** You consent once when you share a project; each pass is
   still a full engine operation with snapshot, journal and rollback, and is listed in History.
-- **Passive usage capture writes outside the engine.** Turning it on for an account edits one key, `statusLine`, in
-  that account's `settings.json`, with a confirm dialog showing the before and after values, a backup of the whole
-  original file, and a restore when you turn it off (`installHook`, `uninstallHook` in `usage.ts`). For account 1
-  this file is `~/.claude/settings.json`, which makes it the one place Baton can write inside `~/.claude`, and only
-  after a warning-style confirm.
+- **Passive usage capture edits one setting, through the engine.** Turning it on for an account changes one key,
+  `statusLine`, in that account's `settings.json`; turning it off restores the previous value exactly (the original
+  file byte-for-byte when nothing else changed it since). Both are engine operations, `usage-hook-on` and
+  `usage-hook-off` (`planHookOn`, `planHookOff` in `usage-hook.ts`): dry-run preview with the exact before and after,
+  verified snapshot, journal, atomic write, verify, automatic rollback, and Undo in History. The file is edited as
+  text, so every other key keeps its exact bytes; a file that is not a valid JSON object is refused, and a status line
+  that is not Baton's is replaced only when you choose to (Baton keeps running it inside its own). For account 1 this
+  file is `~/.claude/settings.json`: the guard list's one exception inside `~/.claude`, allowed only for these
+  operations.
 - **Removing an account** moves its folder to the Trash but does not remove its Keychain sign-in item; Baton never
   touches the Keychain.
 
