@@ -16,6 +16,7 @@ import * as fairuse from '../electron/fairuse';
 import * as trayLogic from '../electron/tray-logic';
 import * as usageHook from '../electron/usage-hook';
 import type { Account } from '../electron/core';
+import * as lib from '../src/lib';
 
 const REAL_HOME = os.homedir();
 const P = '/Users/test/Projects/work/Acme/acme-app'; // shared project (path only — never touched as a folder)
@@ -850,6 +851,112 @@ test('manual limits note is gone from the UI; automatic usage or "Usage unavaila
   ok(!/Limits note|No reset time noted|limitResetAt|limitNote/.test(app), 'no limits note, reset picker or "No reset time noted" in the account UI');
   ok(/Usage unavailable —/.test(card) && /usageRefresh/.test(card), 'fallback text with a Refresh action');
   ok(/allowed: \(keyof typeof patch\)\[\] = \['name', 'color'\]/.test(main), 'stored limitNote/limitResetAt are ignored (no longer writable)');
+});
+
+// ---------- 1.0.2: shares from Home were stored as "no desktop lists" ----------
+
+test('self-heal: shared accounts + no auto + EMPTY desktop list reads as automatic and syncs; file not rewritten', async (s) => {
+  fourApps(s);
+  // CLIENT is a per-project account sharing P by one link, as on the reporter's Mac
+  fs.unlinkSync(path.join(s.client.configDir, 'projects'));
+  fs.mkdirSync(path.join(s.client.configDir, 'projects'));
+  fs.symlinkSync(path.join(s.store, enc(P)), path.join(s.client.configDir, 'projects', enc(P)));
+  const ftKept = s.folder('Claude-Claude Client', FT, 'org-ft');
+  // the exact config Baton 1.0.0's Home "Share with …" button wrote
+  const raw = JSON.stringify({ version: 1, projects: [{ path: P, accounts: ['client'], desktop: [] }] }, null, 2);
+  fs.mkdirSync(path.dirname(roots.sharingFile()), { recursive: true });
+  fs.writeFileSync(roots.sharingFile(), raw);
+  const cfg = sharing.readSharing();
+  ok(cfg.projects[0].auto === true && cfg.projects[0].accounts.join() === 'client', 'read as automatic');
+  ok(fs.readFileSync(roots.sharingFile(), 'utf8') === raw, 'reading never rewrites sharing.json');
+  const ctx = apps.syncContext(await desktop.listDesktopProfiles(emails), terms(s), false);
+  ok(sharing.projectDesktop(cfg.projects[0], ctx).some((k) => k.startsWith('Claude-Claude Client/')), 'the FTCC-style app takes part');
+  const storeBefore = tree(s.store);
+  const meBefore = tree(s.folder('Claude', ME, 'org-me'));
+  ok(!fs.existsSync(path.join(ftKept, 'local_m1.json')), 'before: the default app’s chat is missing from the account’s app');
+  const p = sharing.planSync(sharing.readSharing(), sharing.readSyncState(), none, undefined, ctx);
+  await apply(sharing.syncOperation(p));
+  sharing.cleanupStaging(p.staging);
+  ok(fs.existsSync(path.join(ftKept, 'local_m1.json')), 'next sync: the default app’s index file is in the account’s app list');
+  ok(same(storeBefore, tree(s.store)), 'transcripts untouched');
+  ok(Object.keys(meBefore).every((k) => meBefore[k] === tree(s.folder('Claude', ME, 'org-me'))[k]), 'nothing removed from the default app');
+  ok(fs.readFileSync(roots.sharingFile(), 'utf8') === raw, 'the sync did not rewrite sharing.json');
+  // the next share op writes the healed entry through the engine
+  const r = sharing.planShare({ project: P, accounts: ['client'], desktop: [] }, s.accounts, none, ctx);
+  await apply(r.op);
+  sharing.cleanupStaging(r.staging);
+  ok(JSON.parse(fs.readFileSync(roots.sharingFile(), 'utf8')).projects[0].auto === true, 'next share persists auto: true');
+});
+
+test('root cause: Home "Share with …" sends auto; planShare never stores an empty hand-picked list; custom lists kept', async (s) => {
+  // the Home banner's request (was: { project, accounts, desktop: cur?.desktop ?? [] } — no auto)
+  ok(JSON.stringify(lib.shareArgsFor(P, 'work2')) === JSON.stringify({ project: P, accounts: ['work2'], auto: true }), 'new share from Home: auto');
+  ok(lib.shareArgsFor(P, 'work2', { accounts: ['client'], desktop: [] }).hasOwnProperty('auto'), 'stale non-auto empty entry: auto');
+  const custom = lib.shareArgsFor(P, 'work2', { accounts: ['client'], desktop: ['Claude/a/o', 'Claude-X/a/o'] });
+  ok(!('auto' in custom) && (custom as any).desktop.length === 2 && custom.accounts.join() === 'client,work2', 'hand-picked list kept');
+  const app = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'App.tsx'), 'utf8');
+  ok(/args: shareArgsFor\(project, account\.id, cur\)/.test(app) && !/desktop: cur\?\.desktop \?\? \[\]/.test(app), 'the banner uses shareArgsFor');
+  const r = sharing.planShare(lib.shareArgsFor(P, 'work2') as any, s.accounts, none);
+  await apply(r.op);
+  sharing.cleanupStaging(r.staging);
+  ok(JSON.parse(fs.readFileSync(roots.sharingFile(), 'utf8')).projects[0].auto === true, 'persisted auto: true');
+  // a request without auto and with no lists (any other caller) is stored as automatic too
+  const r2 = sharing.planShare({ project: Q, accounts: ['work2'], desktop: [] }, s.accounts, none);
+  await apply(r2.op);
+  sharing.cleanupStaging(r2.staging);
+  ok(JSON.parse(fs.readFileSync(roots.sharingFile(), 'utf8')).projects.find((x: any) => x.path === Q).auto === true, 'no-lists request stored as auto');
+  // explicit custom non-empty list: unchanged on disk and when read
+  fs.mkdirSync(s.folder('Claude-Side'), { recursive: true });
+  const r3 = sharing.planShare({ project: Q, accounts: ['work2'], desktop: ['Claude-Side/acct-1/org-1'] }, s.accounts, none);
+  await apply(r3.op);
+  sharing.cleanupStaging(r3.staging);
+  const q = JSON.parse(fs.readFileSync(roots.sharingFile(), 'utf8')).projects.find((x: any) => x.path === Q);
+  ok(!q.auto && q.desktop.join() === 'Claude-Side/acct-1/org-1', 'custom list stored as is');
+  const qr = sharing.readSharing().projects.find((x) => x.path === Q)!;
+  ok(!qr.auto && qr.desktop.length === 1, 'custom list read as is');
+  // a custom-but-empty entry with NO accounts is not shared at all (nothing to heal)
+  ok(!sharing.normaliseProject({ path: '/x', accounts: [], desktop: [] }).auto, 'no accounts: not auto');
+  ok(sharing.normaliseProject({ path: '/x', accounts: ['a'], desktop: [], extra: 1 } as any).hasOwnProperty('extra'), 'unknown keys kept');
+});
+
+test('share preview: desktop sidebars note, "no desktop-app chats yet", open app updates after it quits', async (s) => {
+  fourApps(s);
+  const m = sharing.planMigration(s.accounts, [P], none);
+  await apply(m.op);
+  sharing.cleanupStaging(m.staging);
+  const ctx = apps.syncContext(await desktop.listDesktopProfiles(emails), terms(s), false);
+  const r = sharing.planShare({ project: P, accounts: ['client'], desktop: [], auto: true }, s.accounts, new Set(['Claude-Claude Client']), ctx);
+  const notes = r.op.notes!;
+  ok(notes.some((n) => /^Desktop sidebars only list chats started in a desktop app; Terminal chats continue with Continue in Terminal/.test(n)), 'Terminal-vs-desktop line');
+  ok(notes.some((n) => n === 'Claude Client is open — it will show them after it quits and reopens.'), `running app named (${notes.filter((n) => /open/.test(n)).join(' | ')})`);
+  ok(!notes.some((n) => /No desktop-app chats/.test(n)), 'the project has desktop chats');
+  sharing.cleanupStaging(r.staging);
+  const R = '/Users/test/Projects/terminal-only';
+  const r2 = sharing.planShare({ project: R, accounts: ['client'], desktop: [], auto: true }, s.accounts, none, ctx);
+  ok(r2.op.notes!.some((n) => n === 'No desktop-app chats for this project yet — nothing to show in desktop sidebars.'), 'terminal-only project says so');
+  sharing.cleanupStaging(r2.staging);
+  const ui = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'Sharing.tsx'), 'utf8');
+  ok(/Desktop sidebars only list chats started in a desktop app; Terminal chats continue with Continue in Terminal\./.test(ui) && /will show them after it quits and reopens/.test(ui), 'share dialog shows the same lines');
+});
+
+test('desktop attribution: an account’s desktop-app chats are its own; Home wording + link CTA (auto, that account)', async (s) => {
+  fourApps(s);
+  const ctx = apps.syncContext(await desktop.listDesktopProfiles(emails), terms(s), false);
+  const a = sharing.desktopAttribution(P, ctx);
+  ok(a.byAccount.client?.chats === 2, `CLIENT has 2 desktop chats in P (f1, w9) (${a.byAccount.client?.chats})`);
+  ok(a.byAccount.client.apps.sort().join() === 'Claude Client,Side', `apps named (${a.byAccount.client.apps})`);
+  ok(a.byAccount.default?.chats === 1 && !a.byAccount.default.apps.includes('Claude Client'), 'Me: its own app only');
+  ok(!a.bySession.stale, 'old sign-in leftovers are not attributed');
+  ok(a.bySession.f1.every((x) => x.account === 'client') && a.bySession.m1[0].account === 'default', 'per-session origin from cliSessionId');
+  ok(!sharing.desktopAttribution(Q, ctx).byAccount.default, 'other projects: no attribution for Me');
+  const n = lib.unlinkedNotice('FTCC', 'CTBR', { chats: 6, apps: ['Claude Ftcc'] });
+  ok(n.lead === 'FTCC worked on CTBR in the desktop app (6 chats in Claude Ftcc).', n.lead);
+  ok(/^FTCC's desktop chats for CTBR are here, but Terminal as FTCC can't see them yet/.test(n.body) && n.cta === "Link CTBR for FTCC's Terminal…", 'link wording');
+  ok(/not shared with FTCC, so Continue in Terminal starts fresh/.test(lib.unlinkedNotice('FTCC', 'CTBR').body), 'no desktop chats: the plain share wording');
+  ok(JSON.stringify(lib.shareArgsFor('/w/CTBR', 'ftcc')) === JSON.stringify({ project: '/w/CTBR', accounts: ['ftcc'], auto: true }), 'CTA request: auto, that account');
+  const app = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'App.tsx'), 'utf8');
+  ok(!/history store/.test(app) && /SHARED_STORE_LABEL/.test(app), 'no more "<account 1>\'s history store"');
+  ok(/isn't linked for \{account\.name\}'s Terminal yet/.test(app), 'Continue explains it starts fresh until linked');
 });
 
 // ---------- fair use ----------

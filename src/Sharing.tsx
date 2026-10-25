@@ -129,6 +129,12 @@ function ProjectRow({ info, path, onEdit }: { info: SharingInfo; path: string; o
               <span>{apps} desktop app{apps === 1 ? '' : 's'}</span>
             </>
           )}
+          {cfg && cfg.accounts.length > 0 && !(info.derived[path] ?? []).some((k) => (info.desktopCounts[path]?.[k] ?? 0) > 0) && (
+            <>
+              <span className="text-subtle">·</span>
+              <span title="Desktop sidebars only list chats started in a desktop app; Terminal chats continue with Continue in Terminal.">no desktop-app chats yet</span>
+            </>
+          )}
         </div>
       </div>
       <Button size="sm" variant={cfg ? 'secondary' : 'outline'} onClick={onEdit} aria-label={`Change sharing for ${base(path)}`}>
@@ -271,6 +277,7 @@ function ShareEditor({ info, project, onClose, onDone }: { info: SharingInfo; pr
             })}
           </div>
         </div>
+        <DesktopSidebarNote info={info} project={project} lists={accs.length ? shownLists : []} />
         <details className="group rounded-xl border border-line px-3 py-2">
           <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[12px] font-medium text-muted hover:text-fg">
             <ChevronRight size={12} className="transition-transform group-open:rotate-90" aria-hidden /> Advanced — pick desktop chat lists by hand
@@ -315,6 +322,24 @@ function ShareEditor({ info, project, onClose, onDone }: { info: SharingInfo; pr
         </details>
       </div>
     </Dialog>
+  );
+}
+
+/** Desktop sidebars only list desktop-app chats; say so, say when there are none, and name open apps that update later. */
+function DesktopSidebarNote({ info, project, lists }: { info: SharingInfo; project: string; lists: string[] }) {
+  const counts = info.desktopCounts[project] ?? {};
+  const most = Math.max(0, ...lists.map((k) => counts[k] ?? 0));
+  const waiting = [...new Set(info.folders.filter((f) => lists.includes(f.key) && f.running && (counts[f.key] ?? 0) < most).map((f) => f.profileName))];
+  return (
+    <div className="rounded-xl bg-hover px-3 py-2 text-[11.5px] leading-relaxed text-muted">
+      <p>Desktop sidebars only list chats started in a desktop app; Terminal chats continue with Continue in Terminal.</p>
+      {lists.length > 0 && most === 0 && <p className="mt-0.5">No desktop-app chats for this project yet — nothing to show in desktop sidebars.</p>}
+      {waiting.length > 0 && (
+        <p className="mt-0.5 text-warn">
+          {waiting.join(', ')} {waiting.length === 1 ? 'is open — it will show them after it quits and reopens' : 'are open — they will show them after they quit and reopen'}.
+        </p>
+      )}
+    </div>
   );
 }
 

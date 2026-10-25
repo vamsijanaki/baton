@@ -33,8 +33,8 @@ import {
 } from './core';
 import { CLONES, claudeVersion, HUES, setHelperPath, listDesktopProfiles, openProfile, quitDesktops, runningDesktops, type DesktopProfile } from './desktop';
 import { registerOps } from './ops-ipc';
-import type { TerminalIdentity } from './apps';
-import { readSharing, terminalState } from './sharing';
+import { syncContext, type TerminalIdentity } from './apps';
+import { desktopAttribution, readSharing, terminalState } from './sharing';
 import { readSettings } from './safety';
 import { resolveUserData } from './roots';
 import { cachedAuth, checkAuth, hookStatus, probeUsage, probing, readUsage, type ProbeResult } from './usage';
@@ -184,6 +184,8 @@ function snapshot() {
     activeAccountId: activeAccountId(),
     // how the CURRENT project's history is shared with each terminal account
     projectSharing: Object.fromEntries(state.accounts.filter((a) => a.id !== 'default').map((a) => [a.id, terminalState(a, state.project || DEFAULT_PROJECT)])),
+    // which accounts worked on the CURRENT project in a desktop app (from the apps' sidebar lists)
+    projectDesktop: projectAttribution(state.project || DEFAULT_PROJECT).byAccount,
     sharedProjects: readSharing().projects.map((p) => p.path),
     onboarded: readSettings().onboarded,
     home: process.env.HOME || '',
@@ -265,7 +267,19 @@ ipcMain.handle('snapshot', async () => {
   return snapshot();
 });
 
-ipcMain.handle('sessions', (_e, project: string) => listSessions(project));
+/** Desktop-app attribution for a project; desktop apps from the last tray refresh (no extra process scan). */
+function projectAttribution(project: string) {
+  try {
+    return desktopAttribution(project, syncContext(trayProfiles, identities()));
+  } catch {
+    return { byAccount: {}, bySession: {} };
+  }
+}
+ipcMain.handle('sessions', async (_e, project: string) => {
+  const r = await listSessions(project);
+  const by = projectAttribution(project).bySession;
+  return { ...r, sessions: r.sessions.map((x) => (by[x.id] ? { ...x, desktopFrom: by[x.id] } : x)) };
+});
 ipcMain.handle('knownProjects', () => knownProjects());
 
 ipcMain.handle('signIn', async (_e, id: string) => {

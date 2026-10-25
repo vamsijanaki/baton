@@ -34,7 +34,24 @@ export interface SharingConfig {
   version: 1;
   projects: SharedProject[];
 }
-export const readSharing = (): SharingConfig => readJson<SharingConfig>(sharingFile(), { version: 1, projects: [] });
+/**
+ * One stored entry, made safe to use. Shared accounts with no `auto` and an EMPTY hand-picked desktop list is never a
+ * real choice (the Advanced matrix can't produce it; Baton 1.0.0–1.0.1's Home "Share with …" button wrote it), and it
+ * would leave every desktop app out of the project. Such an entry is read as automatic. This happens in memory only:
+ * sharing.json is not rewritten behind the user's back — the next share/unshare/migration writes the healed entry
+ * (with `auto: true`) through the safety engine like any other change. Unknown keys are kept.
+ */
+export function normaliseProject(sp: SharedProject): SharedProject {
+  const accounts = Array.isArray(sp?.accounts) ? sp.accounts.filter((x) => typeof x === 'string') : [];
+  const desktop = Array.isArray(sp?.desktop) ? sp.desktop.filter((x) => typeof x === 'string') : [];
+  const heal = !sp?.auto && accounts.length > 0 && desktop.length === 0;
+  return { ...sp, accounts, desktop, ...(sp?.auto || heal ? { auto: true } : {}) };
+}
+export const readSharing = (): SharingConfig => {
+  const c = readJson<Partial<SharingConfig> | null>(sharingFile(), { version: 1, projects: [] });
+  const projects = Array.isArray(c?.projects) ? c.projects.filter((p) => p && typeof p.path === 'string').map(normaliseProject) : [];
+  return { ...(c ?? {}), version: 1, projects };
+};
 const configStep = (c: SharingConfig): Step => ({ t: 'write', path: sharingFile(), data: JSON.stringify(c, null, 2) });
 const stateStep = (st: SyncState): Step => ({ t: 'write', path: syncStateFile(), data: JSON.stringify(st, null, 2) });
 /** After a planned share/migration ran (or was abandoned): drop its staging copies. */
@@ -364,7 +381,9 @@ export function planShare(req: ShareRequest, accounts: Account[], runningProfile
     if (want) restoreFor.push(a);
   }
   const accIds = req.accounts.filter((id) => id !== 'default');
-  const next: SharedProject = req.auto ? { path: project, accounts: accIds, desktop: [], auto: true } : { path: project, accounts: accIds, desktop: [...new Set(req.desktop)] };
+  // no hand-picked lists + shared accounts = automatic (an empty custom choice would leave every desktop app out)
+  const auto = !!req.auto || (accIds.length > 0 && new Set(req.desktop ?? []).size === 0);
+  const next: SharedProject = auto ? { path: project, accounts: accIds, desktop: [], auto: true } : { path: project, accounts: accIds, desktop: [...new Set(req.desktop)] };
   const keep = next.accounts.length > 0 || (!next.auto && next.desktop.length > 0);
   const before = cfg.projects.some((p) => p.path === project) ? projectDesktop(cur, ctx) : [];
   const after = keep ? projectDesktop(next, ctx) : [];
@@ -408,6 +427,7 @@ export function planShare(req: ShareRequest, accounts: Account[], runningProfile
   touches.push(...sync.touches);
   notes.push(...syncOperation(sync).notes!);
   if (sync.copies) notes.push(`${sync.copies} Code-tab index file(s) copied so the chosen desktop lists show ${path.basename(project)}'s sessions.`);
+  if (keep) notes.push(...desktopNotes(project, after, sync.deferred));
   steps.push(configStep(newConfig), stateStep(sync.newState));
   touches.push(syncStateFile());
   if (!keep) notes.push(`${path.basename(project)} becomes private to account 1 again.`);
@@ -419,6 +439,71 @@ export function planShare(req: ShareRequest, accounts: Account[], runningProfile
     hidden: hides,
     restored,
   };
+}
+
+/** Unique desktop-app chats (index files) of a project across the given lists. */
+export function projectDesktopChats(project: string, keys: string[]): number {
+  const seen = new Set<string>();
+  for (const f of desktopFolders().filter((x) => keys.includes(x.key) && !x.isLink)) {
+    for (const n of list(f.dir).filter((x) => /^local_.*\.json$/.test(x))) {
+      if (seen.has(n)) continue;
+      const r = readStable(path.join(f.dir, n));
+      if (r && insideProject(r.cwd, project)) seen.add(n);
+    }
+  }
+  return seen.size;
+}
+/** What the desktop sidebars will (not) show after sharing — Terminal chats never appear there. */
+export function desktopNotes(project: string, lists: string[], deferred: SyncPlan['deferred']): string[] {
+  const out = ['Desktop sidebars only list chats started in a desktop app; Terminal chats continue with Continue in Terminal (or `claude --resume`).'];
+  if (projectDesktopChats(project, lists) === 0) out.push('No desktop-app chats for this project yet — nothing to show in desktop sidebars.');
+  const waiting = [...new Set(deferred.map((d) => d.folder.split('/')[0]))].map(profileLabel);
+  if (waiting.length) out.push(`${waiting.join(', ')} ${waiting.length === 1 ? 'is open — it will show them after it quits and reopens' : 'are open — they will show them after they quit and reopen'}.`);
+  return out;
+}
+
+// ---------- who worked on a project in a desktop app ----------
+//
+// Every desktop app writes its transcripts to ~/.claude/projects (the shared store), whatever account it is signed in
+// as, so the store alone can't say whose chats they are. The app's sidebar index can: a list owned by an app signed in
+// as account X (never an old sign-in leftover) holding an entry whose cwd is inside the project = X worked on it there.
+
+export interface DesktopAttribution {
+  /** Terminal account id → its desktop-app chats in the project (unique index files) and the apps that list them. */
+  byAccount: Record<string, { chats: number; apps: string[] }>;
+  /** Transcript (cliSessionId) → which accounts' desktop apps list it. */
+  bySession: Record<string, { account: string; app: string }[]>;
+}
+export function desktopAttribution(project: string, ctx: SyncContext): DesktopAttribution {
+  const out: DesktopAttribution = { byAccount: {}, bySession: {} };
+  const files: Record<string, Set<string>> = {};
+  for (const f of ownedFolders(ctx)) {
+    const ids = Object.entries(ctx.accountUuids).filter(([, u]) => u === f.accountUuid).map(([id]) => id);
+    if (!ids.length) continue;
+    const app = profileLabel(f.profile);
+    for (const n of list(f.dir).filter((x) => /^local_.*\.json$/.test(x))) {
+      const r = readStable(path.join(f.dir, n));
+      if (!r || !insideProject(r.cwd, project)) continue;
+      let cli: string | null = null;
+      try {
+        const j = JSON.parse(r.buf.toString('utf8'));
+        cli = typeof j?.cliSessionId === 'string' ? j.cliSessionId : null;
+      } catch {
+        /* readStable parsed it already */
+      }
+      for (const id of ids) {
+        (files[id] ??= new Set()).add(n);
+        const b = (out.byAccount[id] ??= { chats: 0, apps: [] });
+        if (!b.apps.includes(app)) b.apps.push(app);
+        if (cli) {
+          const arr = (out.bySession[cli] ??= []);
+          if (!arr.some((x) => x.account === id && x.app === app)) arr.push({ account: id, app });
+        }
+      }
+    }
+  }
+  for (const [id, set] of Object.entries(files)) out.byAccount[id].chats = set.size;
+  return out;
 }
 
 // ---------- hiding a project's chats from an account's desktop apps (and bringing them back) ----------
@@ -729,7 +814,7 @@ export function planMigration(accounts: Account[], shareProjects: string[], runn
       ...cfg.projects.filter((p) => !projects.includes(p.path)),
       ...projects.map((p) => {
         const old = cfg.projects.find((x) => x.path === p);
-        return { path: p, accounts: [...new Set([...(old?.accounts ?? []), ...termShared])], desktop: [...new Set([...(old?.desktop ?? []), ...participants])] };
+        return { path: p, accounts: [...new Set([...(old?.accounts ?? []), ...termShared])], desktop: [...new Set([...(old?.desktop ?? []), ...participants])], ...(old?.auto ? { auto: true } : {}) };
       }),
     ],
   };

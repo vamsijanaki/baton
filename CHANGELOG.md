@@ -8,6 +8,19 @@ Every pull request with a user-visible change adds a line under **Unreleased** (
 
 ## [Unreleased]
 
+### Fixed
+
+- Sharing a project with **Share with …** on Home no longer leaves every desktop app out: it now follows the
+  accounts like the Shared projects dialog, and projects already saved that way are treated as automatic, so the
+  other account's desktop apps pick up the project's desktop chats on the next sync (open apps after they reopen).
+- The share preview and dialog now say that desktop sidebars only list chats started in a desktop app (Terminal chats
+  continue with Continue in Terminal), say when a project has no desktop-app chats yet, and name an open app that
+  will show the chats after it quits and reopens.
+- Home no longer calls `~/.claude/projects` one account's "history store": it is the shared history every desktop app
+  writes to. Sessions show which account's desktop app they came from, and when an account worked on a project in
+  its desktop app but its Terminal can't see it yet, Home says so and offers **Link … for …'s Terminal** (previewed).
+- Continue in Terminal no longer claims to pick up the latest session for an account the project isn't linked for.
+
 ## [1.0.1] - 2026-10-25
 
 ### Changed

@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import type { Account, AccountCard, LaunchResult, Proc, Session, Snapshot } from './types';
 import { Badge, Button, Checkbox, cn, Dialog, Dot, Input, Kbd, Toggle, Tooltip } from './ui';
-import { base, bytes, setHome, tilde, timeAgo } from './lib';
+import { base, bytes, setHome, shareArgsFor, SHARED_STORE_LABEL, tilde, timeAgo, unlinkedNotice } from './lib';
 import { UsageCard } from './UsageCard';
 import { AccountsView } from './Accounts';
 import { OpsProvider, useOps } from './ops';
@@ -162,7 +162,10 @@ export default function App() {
     [account, project, accounts, toast],
   );
 
-  const continueNow = () => doLaunch(selectedSession ? { resume: selectedSession } : { continueLast: sessions.length > 0 });
+  // this account's Terminal can't see the project's history (not linked): Continue starts fresh there
+  const pst = account && !account.isDefault ? snap?.projectSharing[account.id] : undefined;
+  const unlinked = !!pst && pst !== 'shared' && pst !== 'legacy-all';
+  const continueNow = () => doLaunch(selectedSession ? { resume: selectedSession } : { continueLast: sessions.length > 0 && !unlinked });
 
   // keyboard shortcuts
   useEffect(() => {
@@ -392,7 +395,9 @@ export default function App() {
                 <div className="min-w-0 flex-1 text-right text-[12px] leading-snug text-muted">
                   as <b className="font-semibold text-fg">{account.name}</b>
                   <br />
-                  {selectedSession ? (
+                  {unlinked ? (
+                    <>starts fresh — {base(project)} isn't linked for {account.name}'s Terminal yet</>
+                  ) : selectedSession ? (
                     <>resumes the selected session</>
                   ) : sessions.length ? (
                     <>picks up the latest session</>
@@ -417,13 +422,13 @@ export default function App() {
 
             {onboarding && <Onboarding onAdd={() => setAddOpen(true)} />}
 
-            <ShareBanner account={account} project={project} state={snap.projectSharing[account.id]} onOpen={() => setView('sharing')} />
+            <ShareBanner account={account} project={project} state={snap.projectSharing[account.id]} desktop={snap.projectDesktop?.[account.id]} onOpen={() => setView('sharing')} />
 
             {/* Sessions */}
             <section className="animate-up">
               <div className="mb-2.5 flex items-center gap-3">
                 <h3 className="text-[13px] font-semibold">Sessions in {base(project)}</h3>
-                <span className="text-[12px] text-subtle">{sessions.length} · in {accounts.find((a) => a.isDefault)?.name ?? 'account 1'}'s history store{snap.sharedProjects.includes(project) ? ' · shared project' : ''}</span>
+                <span className="text-[12px] text-subtle">{sessions.length} · in the {SHARED_STORE_LABEL}{snap.sharedProjects.includes(project) ? ' · shared project' : ''}</span>
                 <div className="relative ml-auto w-[260px]">
                   <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-subtle" />
                   <Input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search sessions" className="pl-7 pr-10" />
@@ -476,6 +481,14 @@ export default function App() {
                           )}
                           <span className="text-subtle">·</span>
                           <span className="selectable font-mono text-[10.5px] text-subtle">{s.id.slice(0, 8)}</span>
+                          {s.desktopFrom?.length ? (
+                            <>
+                              <span className="text-subtle">·</span>
+                              <span title={s.desktopFrom.map((o) => `${accounts.find((a) => a.id === o.account)?.name ?? o.account} · ${o.app}`).join('\n')}>
+                                {[...new Set(s.desktopFrom.map((o) => accounts.find((a) => a.id === o.account)?.name ?? o.account))].join(', ')} · desktop
+                              </span>
+                            </>
+                          ) : null}
                           {live && <Badge tone="ok">recently active</Badge>}
                         </div>
                       </div>
@@ -542,10 +555,11 @@ export default function App() {
 }
 
 /** Home: tells the user when the selected account cannot see this project's history, with a one-click (previewed) share. */
-function ShareBanner({ account, project, state, onOpen }: { account: Account; project: string; state?: string; onOpen: () => void }) {
+function ShareBanner({ account, project, state, desktop, onOpen }: { account: Account; project: string; state?: string; desktop?: { chats: number; apps: string[] }; onOpen: () => void }) {
   const runOp = useOps();
   if (account.isDefault || !state || state === 'shared') return null;
   const legacy = state === 'legacy-all';
+  const n = unlinkedNotice(account.name, base(project), desktop);
   return (
     <section role="note" className={cn('animate-up flex items-center gap-3 rounded-2xl border px-4 py-3 text-[12.5px]', legacy ? 'border-warn/40 bg-warn/[0.06]' : 'border-line bg-card')}>
       <Share2 size={15} className={legacy ? 'text-warn' : 'text-muted'} aria-hidden />
@@ -556,7 +570,8 @@ function ShareBanner({ account, project, state, onOpen }: { account: Account; pr
           </>
         ) : (
           <>
-            <b>{base(project)}</b>'s history is <b>not shared</b> with {account.name}, so Continue starts fresh there. Share it to pick up the same sessions.
+            {n.lead && <b className="block">{n.lead}</b>}
+            {n.body}
           </>
         )}
       </span>
@@ -573,13 +588,14 @@ function ShareBanner({ account, project, state, onOpen }: { account: Account; pr
             const cur = info.config.projects.find((p) => p.path === project);
             runOp({
               kind: 'share',
-              args: { project, accounts: [...new Set([...(cur?.accounts ?? []), account.id])], desktop: cur?.desktop ?? [] },
-              title: `Share ${base(project)} with ${account.name}`,
-              confirmLabel: 'Share',
+              // always the normal previewed share; desktop lists follow the accounts unless a hand-picked list exists
+              args: shareArgsFor(project, account.id, cur),
+              title: desktop?.chats ? `Link ${base(project)} for ${account.name}'s Terminal` : `Share ${base(project)} with ${account.name}`,
+              confirmLabel: desktop?.chats ? 'Link' : 'Share',
             });
           }}
         >
-          Share with {account.name}…
+          {n.cta}
         </Button>
       )}
     </section>

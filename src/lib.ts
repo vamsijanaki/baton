@@ -43,3 +43,31 @@ export function toLocalInput(iso: string | null | undefined) {
   const off = d.getTimezoneOffset() * 60000;
   return new Date(d.getTime() - off).toISOString().slice(0, 16);
 }
+
+// ---------- sharing a project from Home (pure, tested in scripts/test.ts) ----------
+
+export interface ShareCfg { accounts: string[]; desktop: string[]; auto?: boolean }
+/** The share request for "turn this account on for this project": automatic desktop lists unless a hand-picked list exists. */
+export function shareArgsFor(project: string, accountId: string, cur?: ShareCfg) {
+  const accounts = [...new Set([...(cur?.accounts ?? []), accountId])];
+  return cur && !cur.auto && cur.desktop.length ? { project, accounts, desktop: cur.desktop } : { project, accounts, auto: true as const };
+}
+
+/** Home banner for an account whose Terminal can't see a project's history. `desktop` = its own desktop-app chats there. */
+export function unlinkedNotice(account: string, projectName: string, desktop?: { chats: number; apps: string[] }) {
+  const n = desktop?.chats ?? 0;
+  if (n > 0)
+    return {
+      lead: `${account} worked on ${projectName} in the desktop app (${n} chat${n === 1 ? '' : 's'}${desktop!.apps.length ? ` in ${desktop!.apps.join(', ')}` : ''}).`,
+      body: `${account}'s desktop chats for ${projectName} are here, but Terminal as ${account} can't see them yet — Continue in Terminal starts fresh until you link it.`,
+      cta: `Link ${projectName} for ${account}'s Terminal…`,
+    };
+  return {
+    lead: '',
+    body: `${projectName}'s history is not shared with ${account}, so Continue in Terminal starts fresh there. Share it to pick up the same sessions.`,
+    cta: `Share with ${account}…`,
+  };
+}
+
+/** ~/.claude/projects holds every desktop app's chats (whatever account) and account 1's Terminal chats. */
+export const SHARED_STORE_LABEL = 'shared history (~/.claude/projects)';

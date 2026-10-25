@@ -37,6 +37,8 @@ export interface Snapshot {
   links: { aup: string; consumerTerms: string; claudeCodeLegal: string; support: string };
   activeAccountId: string;
   projectSharing: Record<string, TermState>;
+  /** Account id → its desktop-app chats in the current project (from the apps' sidebar lists). */
+  projectDesktop?: Record<string, { chats: number; apps: string[] }>;
   sharedProjects: string[];
   onboarded: boolean;
   home: string;
@@ -183,7 +185,7 @@ export interface MigrationSummary {
   unchanged: string[];
   needed: boolean;
 }
-export interface Session { id: string; title: string; mtime: number; size: number; gitBranch: string | null; parentId?: string | null }
+export interface Session { id: string; title: string; mtime: number; size: number; gitBranch: string | null; parentId?: string | null; desktopFrom?: { account: string; app: string }[] }
 export type LaunchResult = { status: 'conflict'; conflicts: Proc[] } | { status: 'launched'; command: string; dryRun: boolean } | LaunchBlocked;
 
 declare global {
