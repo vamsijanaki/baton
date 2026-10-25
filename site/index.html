@@ -17,6 +17,7 @@
   window.BATON = {
     download: "https://github.com/vamsijanaki/baton/releases/latest",
     source:   "https://github.com/vamsijanaki/baton",
+    sponsor:  "https://github.com/sponsors/vamsijanaki",
     version:  "1.0.0"
   };
 </script>
@@ -321,6 +322,9 @@ p { margin: 0; }
 .foot-row { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: center; }
 .foot-row a { color: var(--ink-2); }
 .disclaimer { font-size: var(--s-0); color: var(--ink-3); max-width: 80ch; }
+.sponsor { display: inline-flex; align-items: center; gap: 6px; }
+.sponsor svg { width: 14px; height: 14px; color: #db61a2; flex: none; }
+.sponsor-note { font-size: var(--s-0); color: var(--ink-3); margin-top: 22px; }
 </style>
 </head>
 <body>
@@ -743,6 +747,7 @@ npm run dist   <span class="c"># → release/Baton-*-arm64.dmg</span></code></pr
           <p><a data-link="source" href="#download">Read the source on GitHub</a></p>
         </div>
       </div>
+      <p class="sponsor-note">Baton is free. If it helps you, <a class="sponsor" data-link="sponsor" href="https://github.com/sponsors/vamsijanaki"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 4.3 2.5h2c.7-1.4 2.2-2.5 4.3-2.5 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg>sponsor it on GitHub</a>; it pays for Apple notarization and ongoing maintenance.</p>
     </div>
   </section>
 </main>
@@ -753,6 +758,7 @@ npm run dist   <span class="c"># → release/Baton-*-arm64.dmg</span></code></pr
       <a class="brand" href="#top"><img src="assets/icon.svg" alt="" width="28" height="28">Baton</a>
       <a data-link="source" href="#download">Source</a>
       <a data-link="download" href="#download">Releases</a>
+      <a class="sponsor" data-link="sponsor" href="https://github.com/sponsors/vamsijanaki"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 4.3 2.5h2c.7-1.4 2.2-2.5 4.3-2.5 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg>Sponsor</a>
       <span>MIT licence © 2026 Vamsi Janaki</span>
     </div>
     <p class="disclaimer">Not affiliated with or endorsed by Anthropic. Claude is a trademark of Anthropic. Baton is an independent open-source project; Claude and Claude Code are named only to describe what it works with.</p>

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Settings as Cog, Info, Download, Sparkles, ShieldCheck } from 'lucide-react';
+import { Settings as Cog, Info, Download, Sparkles, ShieldCheck, Heart } from 'lucide-react';
+
+const SPONSOR_URL = 'https://github.com/sponsors/vamsijanaki';
 import type { Settings } from './types';
 import { Button, Card, Input, PageHeader, Toggle } from './ui';
 import { tilde } from './lib';
@@ -92,6 +94,13 @@ export function SettingsView({ toast, dryRun, onOnboarding }: { toast: (t: strin
           </p>
           <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
             Uses your own Claude accounts on this Mac only; nothing is uploaded and no sign-in tokens are read or copied.
+          </p>
+          <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
+            Baton is free. If it helps you,{' '}
+            <a href={SPONSOR_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent hover:underline">
+              <Heart size={11} /> Sponsor on GitHub
+            </a>{' '}
+            (opens in your browser).
           </p>
         </Card>
       )}
