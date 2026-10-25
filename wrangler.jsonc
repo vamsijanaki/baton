@@ -1,0 +1,6 @@
+// Cloudflare Workers static-assets deploy for the website in site/ (no build step).
+{
+  "name": "baton",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./site" }
+}
