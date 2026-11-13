@@ -8,6 +8,8 @@ Every pull request with a user-visible change adds a line under **Unreleased** (
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-11-14
+
 ### Fixed
 - Desktop chat sync no longer gets stuck rewriting the same chats every few seconds while a desktop app is open (it could slow down or freeze the Mac and keep flipping a chat list between two versions). An older copy in a running app now waits until that app quits, and the next pass leaves it alone.
 - History no longer grows without limit: finished background sync passes are removed along with their pruned snapshots, and leftovers from earlier versions are cleared on the next start.
@@ -110,7 +112,8 @@ First public release. A Mac app (Apple silicon) for one person using more than o
 - Never reads tokens or the Keychain, never modifies Claude Code or Claude.app, no servers, no telemetry. Inherited
   `CLAUDE_*` / `ANTHROPIC_*` variables are cleared at start-up so each `claude` runs as exactly the chosen account.
 
-[Unreleased]: https://github.com/vamsijanaki/baton/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/vamsijanaki/baton/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/vamsijanaki/baton/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/vamsijanaki/baton/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/vamsijanaki/baton/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/vamsijanaki/baton/compare/v1.0.1...v1.0.2
