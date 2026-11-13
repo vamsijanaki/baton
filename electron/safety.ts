@@ -363,7 +363,33 @@ export function pruneSnapshots(): string[] {
       removed.push(s.id);
     }
   }
+  pruneSyncJournal(removed);
   return removed;
+}
+
+/**
+ * A finished sync pass whose snapshot is gone can not be restored or undone, so its journal entry goes with it.
+ * Only Baton's own records of background syncs; every other kind of entry is kept. With `ids` omitted, sweeps all
+ * such leftovers (once on start: older versions never pruned these, and listing the journal reads every entry).
+ */
+export function pruneSyncJournal(ids?: string[]): number {
+  if (readOnly()) return 0;
+  let names: string[];
+  try {
+    names = ids ? ids.map((id) => `${id}.json`) : fs.readdirSync(journalDir()).filter((n) => /-sync-[0-9a-f]+\.json$/.test(n));
+  } catch {
+    return 0;
+  }
+  let n = 0;
+  for (const name of names) {
+    const id = name.slice(0, -5);
+    if (fs.existsSync(path.join(snapshotsDir(), id))) continue;
+    const j = readJson<JournalEntry | null>(path.join(journalDir(), name), null);
+    if (!j || j.kind !== 'sync' || j.status !== 'done') continue;
+    fs.rmSync(path.join(journalDir(), name), { force: true });
+    n++;
+  }
+  return n;
 }
 
 // ---------- operations ----------

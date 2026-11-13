@@ -8,6 +8,10 @@ Every pull request with a user-visible change adds a line under **Unreleased** (
 
 ## [Unreleased]
 
+### Fixed
+- Desktop chat sync no longer gets stuck rewriting the same chats every few seconds while a desktop app is open (it could slow down or freeze the Mac and keep flipping a chat list between two versions). An older copy in a running app now waits until that app quits, and the next pass leaves it alone.
+- History no longer grows without limit: finished background sync passes are removed along with their pruned snapshots, and leftovers from earlier versions are cleared on the next start.
+
 ## [1.1.1] - 2026-10-25
 
 ### Changed

@@ -287,11 +287,13 @@ export function planSync(cfg: SharingConfig, state: SyncState, runningProfiles: 
     for (const [file, vs] of vers) {
       if (unstable.has(file)) continue; // mid-write somewhere — next pass
       const last = ps[file];
-      const changed = vs.filter((v) => !last || v.hash !== last.hash);
-      const cands = changed.length ? changed : vs;
-      const sorted = [...cands].sort((a, b) => b.mtimeMs - a.mtimeMs || a.hash.localeCompare(b.hash));
-      const winner = sorted[0];
-      const losers = sorted.filter((v) => v.hash !== winner.hash);
+      // "changed" is per folder: against what Baton last saw or wrote THERE. A running app's folder keeps an older
+      // version until it quits; comparing it with the group's hash made that version win every other pass (ping-pong).
+      const changed = vs.filter((v) => !last || v.hash !== (last.folders[v.folder.key] ?? last.hash));
+      const newest = (xs: FileVer[]) => [...xs].sort((a, b) => b.mtimeMs - a.mtimeMs || a.hash.localeCompare(b.hash));
+      const sorted = changed.length ? newest(changed) : newest(vs);
+      const winner = changed.length ? sorted[0] : (vs.find((v) => v.hash === last?.hash) ?? sorted[0]);
+      const losers = changed.length ? sorted.filter((v) => v.hash !== winner.hash) : [];
       if (losers.length) plan.conflicts.push({ project: sp.key, file, winner: winner.folder.key, losers: losers.map((l) => l.folder.key) });
       const rec = { hash: winner.hash, mtimeMs: winner.mtimeMs, folders: { ...(last?.folders ?? {}) } };
       let staged = '';
@@ -304,6 +306,7 @@ export function planSync(cfg: SharingConfig, state: SyncState, runningProfiles: 
         if (!v && last?.folders[f.key]) continue; // removed there by the app: never re-add, never delete elsewhere
         if (runningProfiles.has(f.profile)) {
           plan.deferred.push({ file, folder: f.key, reason: `${f.profile} is running` });
+          if (v) rec.folders[f.key] = v.hash; // seen there: only a later edit in that app counts as a change
           continue;
         }
         if (!staged && readOnly()) staged = path.join(winner.folder.dir, file); // preview only: nothing is staged

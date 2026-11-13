@@ -553,7 +553,9 @@ export function registerOps(ctx: OpsContext) {
     });
   }
 
-  // start: roll back anything a crash interrupted, then watch
+  // start: drop journal entries of pruned sync passes, roll back anything a crash interrupted, then watch
+  const swept = safety.pruneSyncJournal();
+  if (swept) ctx.log(`start: removed ${swept} journal entr(ies) of old sync passes whose snapshots were pruned`);
   const rec = safety.recoverInterrupted();
   if (rec.length) {
     ctx.log(`start: rolled back ${rec.length} interrupted operation(s): ${rec.map((j) => j.title).join(', ')}`);

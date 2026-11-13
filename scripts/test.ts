@@ -437,6 +437,54 @@ test('running-process refusal: operations wait; sync defers writes to a running 
   ok(p.copies === 1 && fs.existsSync(path.join(B, 'local_x.json')), 'copied once it quit');
 });
 
+test('desktop sync: an older copy in a running app is not a change (no ping-pong); updated after it quits', async (s) => {
+  const A = s.folder('Claude');
+  const B1 = s.folder('Claude-Side', 'acct-1', 'org-1');
+  const B2 = s.folder('Claude-Side', 'acct-1', 'org-2'); // an older org list of the same app
+  for (const d of [B1, B2]) fs.mkdirSync(d, { recursive: true });
+  safety.writeJsonAtomic(roots.sharingFile(), { version: 1, projects: [{ path: P, accounts: [], desktop: ['Claude/acct-1/org-1', 'Claude-Side/acct-1/org-1', 'Claude-Side/acct-1/org-2'] }] });
+  const t0 = Date.now() - 60_000;
+  writeIndex(A, 'x', P, { title: 'v1' }, t0);
+  await syncOnce();
+  ok(fs.existsSync(path.join(B2, 'local_x.json')), 'all three lists start in step');
+  const running = new Set(['Claude-Side']);
+  writeIndex(B1, 'x', P, { title: 'v2' }, t0 + 10_000); // the open app edits its current list only
+  let p = await syncOnce(running);
+  ok(p.copies === 1 && JSON.parse(fs.readFileSync(path.join(A, 'local_x.json'), 'utf8')).title === 'v2', 'newest edit reaches the closed app');
+  for (let i = 0; i < 4; i++) {
+    p = await syncOnce(running);
+    ok(p.copies === 0 && p.conflicts.length === 0, `pass ${i + 2}: nothing to write while the older copy waits`);
+  }
+  ok(JSON.parse(fs.readFileSync(path.join(A, 'local_x.json'), 'utf8')).title === 'v2', 'the closed app keeps the newest version');
+  ok(safety.listJournal().filter((j) => j.kind === 'sync').length === 2, 'no journal entry per pass');
+  p = await syncOnce();
+  ok(p.copies === 1 && JSON.parse(fs.readFileSync(path.join(B2, 'local_x.json'), 'utf8')).title === 'v2', 'older copy updated once the app quits');
+  writeIndex(B1, 'x', P, { title: 'v3' }, t0 + 20_000);
+  p = await syncOnce(running);
+  ok(p.copies === 1 && JSON.parse(fs.readFileSync(path.join(A, 'local_x.json'), 'utf8')).title === 'v3', 'a later edit in the running app still syncs');
+});
+
+test('journal: finished sync passes go with their pruned snapshots; other entries stay; start sweep', async (s) => {
+  safety.writeSettings({ retention: 5 });
+  const { A } = twoFolders(s);
+  const f = path.join(s.work2.configDir, 'n.txt');
+  await apply({ kind: 'n', title: 'an operation', steps: [{ t: 'write', path: f, data: 'x' }], touches: [f] });
+  for (let i = 0; i < 12; i++) {
+    writeIndex(A, 'x', P, { title: `v${i}` }, Date.now() - 60_000 + i * 1000);
+    await syncOnce();
+  }
+  const syncs = () => safety.listJournal().filter((j) => j.kind === 'sync');
+  ok(syncs().length === 5 && syncs().every((j) => fs.existsSync(path.join(roots.snapshotsDir(), j.snapshotId))), `sync entries follow retention (${syncs().length})`);
+  ok(safety.listJournal().some((j) => j.kind === 'n'), 'operation entries are kept');
+  // leftovers from older versions: sync entries whose snapshots were pruned, plus one that failed
+  const keep = syncs()[0];
+  fs.rmSync(path.join(roots.snapshotsDir(), syncs()[1].snapshotId), { recursive: true });
+  const failed = { ...keep, id: '2020-01-01T00-00-00-000Z-sync-dead', snapshotId: '2020-01-01T00-00-00-000Z-sync-dead', status: 'rolled-back' };
+  safety.writeJsonAtomic(path.join(roots.journalDir(), `${failed.id}.json`), failed);
+  ok(safety.pruneSyncJournal() === 1, 'start sweep removes the orphaned finished pass');
+  ok(syncs().length === 5 && safety.listJournal().some((j) => j.id === failed.id), 'a pass that did not finish is kept');
+});
+
 test('snapshot retention keeps N, never the newest 5, pinned or quarantined ones', async (s) => {
   safety.writeSettings({ retention: 6 });
   const f = path.join(s.work2.configDir, 'n.txt');
